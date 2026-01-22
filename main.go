@@ -36,7 +36,7 @@ func main() {
 	port, _ := strconv.Atoi(getEnv("MCP_SERVER_PORT", "8000"))
 
 	client := wazuh.NewClient(apiHost, apiPort, apiUsername, apiPassword, indexerHost, indexerPort, indexerUsername, indexerPassword, verifySSL)
-	s := mcp.NewServer(&mcp.Implementation{Name: "mcp-server-wazuh", Version: "0.3.0"}, nil)
+	s := mcp.NewServer(&mcp.Implementation{Name: "mcp-server-wazuh", Version: "0.4.0"}, nil)
 
 	registerTools(s, client)
 
