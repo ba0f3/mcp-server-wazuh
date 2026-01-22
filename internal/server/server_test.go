@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ba0f3/mcp-server-wazuh/internal/testutils"
+	"github.com/ba0f3/mcp-server-wazuh/internal/tools"
 	"github.com/ba0f3/mcp-server-wazuh/internal/wazuh"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -42,7 +43,7 @@ func TestToolsList(t *testing.T) {
 	// Use mock server URL directly
 	wazuhClient := wazuh.NewClient(mockServer.URL(), 0, "wazuh", "wazuh", mockServer.URL(), 0, "admin", "admin", false)
 	s := mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "1.0.0"}, nil)
-	registerTools(s, wazuhClient)
+	tools.RegisterTools(s, wazuhClient)
 
 	t1, t2 := mcp.NewInMemoryTransports()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -90,7 +91,7 @@ func TestGetWazuhAlertSummarySuccess(t *testing.T) {
 
 	wazuhClient := wazuh.NewClient(mockServer.URL(), 0, "wazuh", "wazuh", mockServer.URL(), 0, "admin", "admin", false)
 	s := mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "1.0.0"}, nil)
-	registerTools(s, wazuhClient)
+	tools.RegisterTools(s, wazuhClient)
 
 	t1, t2 := mcp.NewInMemoryTransports()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -137,7 +138,7 @@ func TestGetWazuhAlertSummaryEmpty(t *testing.T) {
 
 	wazuhClient := wazuh.NewClient(mockServer.URL(), 0, "wazuh", "wazuh", mockServer.URL(), 0, "admin", "admin", false)
 	s := mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "1.0.0"}, nil)
-	registerTools(s, wazuhClient)
+	tools.RegisterTools(s, wazuhClient)
 
 	t1, t2 := mcp.NewInMemoryTransports()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -176,7 +177,7 @@ func TestGetWazuhAlertSummaryError(t *testing.T) {
 
 	wazuhClient := wazuh.NewClient(mockServer.URL(), 0, "wazuh", "wazuh", mockServer.URL(), 0, "admin", "admin", false)
 	s := mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "1.0.0"}, nil)
-	registerTools(s, wazuhClient)
+	tools.RegisterTools(s, wazuhClient)
 
 	t1, t2 := mcp.NewInMemoryTransports()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

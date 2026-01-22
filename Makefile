@@ -3,10 +3,10 @@
 NAME = ghcr.io/ba0f3/mcp-server-wazuh
 
 build:
-	go build -o $(NAME) main.go
+	go build -o mcp-server-wazuh ./cmd/mcp-server-wazuh
 
 run:
-	go run main.go
+	go run ./cmd/mcp-server-wazuh
 
 docker-build:
 	docker build -t $(NAME) .

@@ -85,7 +85,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          go build -ldflags="-s -w" -o ${{ matrix.output_name }} .
+          go build -ldflags="-s -w" -o ${{ matrix.output_name }} ./cmd/mcp-server-wazuh
 
       - name: Check dynamic dependencies (macOS only)
         if: matrix.os == 'macos-latest' || matrix.os == 'macos-14'

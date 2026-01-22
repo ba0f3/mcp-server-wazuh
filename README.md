@@ -131,7 +131,7 @@ For enhanced threat intelligence and incident response capabilities, the Wazuh M
     cd mcp-server-wazuh
 
     # Build the binary
-    go build -o mcp-server-wazuh .
+    go build -o mcp-server-wazuh ./cmd/mcp-server-wazuh
     ```
     The binary will be available as `mcp-server-wazuh` in the current directory.
 
@@ -245,7 +245,7 @@ The "Required: Yes" indicates that these variables are essential for the server 
 3.  **Build:**
     ```bash
     # Build the binary
-    go build -o mcp-server-wazuh .
+    go build -o mcp-server-wazuh ./cmd/mcp-server-wazuh
     ```
 4.  **Run:**
     ```bash
@@ -253,7 +253,7 @@ The "Required: Yes" indicates that these variables are essential for the server 
     ./mcp-server-wazuh
 
     # Or run directly with go
-    go run .
+    go run ./cmd/mcp-server-wazuh
 
     # Run with HTTP transport
     MCP_SERVER_TRANSPORT=http ./mcp-server-wazuh
