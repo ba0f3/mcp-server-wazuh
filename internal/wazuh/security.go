@@ -21,6 +21,9 @@ func (c *Client) AnalyzeSecurityThreat(indicator string, indicatorType string) (
 	}
 
 	if resp.IsError() {
+		if resp.StatusCode() == 404 {
+			return nil, fmt.Errorf("security threat analysis endpoint not found (404): the /security/threat/analyze endpoint is not available in this Wazuh installation. This endpoint may require a custom Wazuh extension or module")
+		}
 		return nil, fmt.Errorf("error analyzing security threat: %s", resp.String())
 	}
 
@@ -47,6 +50,10 @@ func (c *Client) CheckIOCReputation(indicator string, indicatorType string) (int
 	}
 
 	if resp.IsError() {
+		// Check if the endpoint doesn't exist (404)
+		if resp.StatusCode() == 404 {
+			return nil, fmt.Errorf("IOC reputation endpoint not found (404): the /security/ioc/reputation endpoint is not available in this Wazuh installation. This endpoint may require a custom Wazuh extension or module")
+		}
 		return nil, fmt.Errorf("error checking IOC reputation: %s", resp.String())
 	}
 
@@ -71,6 +78,9 @@ func (c *Client) PerformRiskAssessment(agentID string) (interface{}, error) {
 	}
 
 	if resp.IsError() {
+		if resp.StatusCode() == 404 {
+			return nil, fmt.Errorf("risk assessment endpoint not found (404): the /security/risk endpoint is not available in this Wazuh installation. This endpoint may require a custom Wazuh extension or module")
+		}
 		return nil, fmt.Errorf("error performing risk assessment: %s", resp.String())
 	}
 
@@ -181,6 +191,9 @@ func (c *Client) GenerateSecurityReport(reportType string, includeRecommendation
 	}
 
 	if resp.IsError() {
+		if resp.StatusCode() == 404 {
+			return nil, fmt.Errorf("security report endpoint not found (404): the /security/reports/generate endpoint is not available in this Wazuh installation. This endpoint may require a custom Wazuh extension or module")
+		}
 		return nil, fmt.Errorf("error generating security report: %s", resp.String())
 	}
 
@@ -209,6 +222,9 @@ func (c *Client) RunComplianceCheck(framework string, agentID string) (interface
 	}
 
 	if resp.IsError() {
+		if resp.StatusCode() == 404 {
+			return nil, fmt.Errorf("compliance check endpoint not found (404): the /security/compliance/check endpoint is not available in this Wazuh installation. This endpoint may require a custom Wazuh extension or module")
+		}
 		return nil, fmt.Errorf("error running compliance check: %s", resp.String())
 	}
 
