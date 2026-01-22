@@ -78,32 +78,84 @@ func (c *Client) GetAlerts(limit int, ruleID, level, agentID, timestampStart, ti
 	return result.Hits.Hits, nil
 }
 
+// GetAlertSummary retrieves alert summary by querying the indexer and aggregating locally
 func (c *Client) GetAlertSummary(timeRange string, groupBy string) (interface{}, error) {
-	params := map[string]string{}
-	if timeRange != "" {
-		params["time_range"] = timeRange
-	}
-	if groupBy != "" {
-		params["group_by"] = groupBy
-	}
-
-	// NOTE: This endpoint might not be available in all Wazuh versions.
-	// It's used in the reference project.
-	resp, err := c.ManagerRequest().
-		SetQueryParams(params).
-		Get("/alerts/summary")
-
+	// Parse time range to get timestamp boundaries
+	timestampStart, timestampEnd, err := parseTimeRange(timeRange)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error parsing time range: %w", err)
 	}
 
-	if resp.IsError() {
-		return nil, fmt.Errorf("error getting alert summary: %s", resp.String())
+	// Default groupBy to rule.level if not specified
+	if groupBy == "" {
+		groupBy = "rule.level"
 	}
 
-	var result map[string]interface{}
-	if err := json.Unmarshal(resp.Body(), &result); err != nil {
-		return nil, err
+	// Query alerts from the indexer
+	alerts, err := c.GetAlerts(10000, "", "", "", timestampStart, timestampEnd)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching alerts for summary: %w", err)
+	}
+
+	// Aggregate alerts based on groupBy field
+	summaryMap := make(map[string]int)
+	totalAlerts := len(alerts)
+
+	for _, alert := range alerts {
+		source, ok := alert["_source"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		var groupKey string
+		switch groupBy {
+		case "rule.level":
+			if rule, ok := source["rule"].(map[string]interface{}); ok {
+				if level, ok := rule["level"].(float64); ok {
+					groupKey = fmt.Sprintf("Level %.0f", level)
+				}
+			}
+		case "rule.id":
+			if rule, ok := source["rule"].(map[string]interface{}); ok {
+				if id, ok := rule["id"].(float64); ok {
+					groupKey = fmt.Sprintf("Rule %.0f", id)
+				}
+			}
+		case "agent.id":
+			if agent, ok := source["agent"].(map[string]interface{}); ok {
+				if id, ok := agent["id"].(string); ok {
+					groupKey = fmt.Sprintf("Agent %s", id)
+				} else if id, ok := agent["id"].(float64); ok {
+					groupKey = fmt.Sprintf("Agent %.0f", id)
+				}
+			}
+		default:
+			// Try to get the field directly
+			if val, ok := source[groupBy]; ok {
+				groupKey = fmt.Sprintf("%v", val)
+			}
+		}
+
+		if groupKey == "" {
+			groupKey = "Unknown"
+		}
+		summaryMap[groupKey]++
+	}
+
+	// Convert to list format
+	summary := []map[string]interface{}{}
+	for key, count := range summaryMap {
+		summary = append(summary, map[string]interface{}{
+			"group": key,
+			"count": count,
+		})
+	}
+
+	result := map[string]interface{}{
+		"time_range":   timeRange,
+		"group_by":     groupBy,
+		"total_alerts": totalAlerts,
+		"summary":      summary,
 	}
 
 	return result, nil

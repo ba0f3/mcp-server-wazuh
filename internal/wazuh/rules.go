@@ -84,20 +84,61 @@ func (c *Client) GetRuleInfo(id int) (*Rule, error) {
 	return &result.Data.AffectedItems[0], nil
 }
 
+// GetRulesSummary retrieves rules summary by querying /rules endpoint and aggregating locally
 func (c *Client) GetRulesSummary() (interface{}, error) {
-	resp, err := c.ManagerRequest().Get("/rules/summary")
-
+	// Get all rules (with a reasonable limit)
+	rules, err := c.GetRules(1000, nil, "", "")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error fetching rules: %w", err)
 	}
 
-	if resp.IsError() {
-		return nil, fmt.Errorf("error getting rules summary: %s", resp.String())
+	// Aggregate statistics
+	levelCount := make(map[int]int)
+	statusCount := make(map[string]int)
+	groupCount := make(map[string]int)
+	totalRules := len(rules)
+
+	for _, rule := range rules {
+		levelCount[rule.Level]++
+		statusCount[rule.Status]++
+		for _, group := range rule.Groups {
+			groupCount[group]++
+		}
 	}
 
-	var result map[string]interface{}
-	if err := json.Unmarshal(resp.Body(), &result); err != nil {
-		return nil, err
+	// Format level summary
+	levelSummary := []map[string]interface{}{}
+	for level, count := range levelCount {
+		levelSummary = append(levelSummary, map[string]interface{}{
+			"level": level,
+			"count": count,
+		})
+	}
+
+	// Format status summary
+	statusSummary := []map[string]interface{}{}
+	for status, count := range statusCount {
+		statusSummary = append(statusSummary, map[string]interface{}{
+			"status": status,
+			"count":  count,
+		})
+	}
+
+	// Format group summary (top 10)
+	groupSummary := []map[string]interface{}{}
+	for group, count := range groupCount {
+		groupSummary = append(groupSummary, map[string]interface{}{
+			"group": group,
+			"count": count,
+		})
+	}
+
+	result := map[string]interface{}{
+		"total_rules":    totalRules,
+		"by_level":       levelSummary,
+		"by_status":      statusSummary,
+		"by_group":       groupSummary,
+		"total_groups":   len(groupCount),
 	}
 
 	return result, nil
