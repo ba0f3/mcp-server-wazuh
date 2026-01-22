@@ -106,29 +106,6 @@ func (c *Client) GetAgentInfo(id string) (*Agent, error) {
 	return &result.Data.AffectedItems[0], nil
 }
 
-func (c *Client) CheckAgentHealth(agentID string) (interface{}, error) {
-	resp, err := c.ManagerRequest().
-		SetPathParams(map[string]string{"agent_id": agentID}).
-		Get("/agents/{agent_id}/health")
-
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.IsError() {
-		if resp.StatusCode() == 404 {
-			return nil, fmt.Errorf("agent health endpoint not found (404): the /agents/{agent_id}/health endpoint is not available in this Wazuh installation. This endpoint may require a specific Wazuh version or configuration")
-		}
-		return nil, fmt.Errorf("error checking agent health: %s", resp.String())
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(resp.Body(), &result); err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
 
 // FlexibleTime can unmarshal both number (Unix timestamp) and string values
 type FlexibleTime struct {
@@ -244,20 +221,104 @@ func (c *Client) GetAgentPorts(agentID string, limit int) ([]Port, error) {
 	return result.Data.AffectedItems, nil
 }
 
-func (c *Client) GetAgentConfiguration(agentID string) (interface{}, error) {
+// GetAgentConfiguration retrieves agent configuration for a specific component
+func (c *Client) GetAgentConfiguration(agentID, component, configuration string) (interface{}, error) {
 	resp, err := c.ManagerRequest().
-		SetPathParams(map[string]string{"agent_id": agentID}).
-		Get("/agents/{agent_id}/config")
+		SetPathParams(map[string]string{
+			"agent_id":      agentID,
+			"component":     component,
+			"configuration": configuration,
+		}).
+		Get("/agents/{agent_id}/config/{component}/{configuration}")
 
 	if err != nil {
 		return nil, err
 	}
 
 	if resp.IsError() {
-		if resp.StatusCode() == 404 {
-			return nil, fmt.Errorf("agent configuration endpoint not found (404): the /agents/{agent_id}/config endpoint is not available in this Wazuh installation. This endpoint may require a specific Wazuh version or configuration")
-		}
 		return nil, fmt.Errorf("error getting agent configuration: %s", resp.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(resp.Body(), &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// GetAgentSummaryOS retrieves a summary of agents grouped by OS
+func (c *Client) GetAgentSummaryOS() (interface{}, error) {
+	resp, err := c.ManagerRequest().Get("/agents/summary/os")
+
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.IsError() {
+		return nil, fmt.Errorf("error getting agent OS summary: %s", resp.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(resp.Body(), &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// GetAgentSummaryStatus retrieves a summary of agents grouped by status
+func (c *Client) GetAgentSummaryStatus() (interface{}, error) {
+	resp, err := c.ManagerRequest().Get("/agents/summary/status")
+
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.IsError() {
+		return nil, fmt.Errorf("error getting agent status summary: %s", resp.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(resp.Body(), &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// GetAgentGroups retrieves all agent groups
+func (c *Client) GetAgentGroups() (interface{}, error) {
+	resp, err := c.ManagerRequest().Get("/groups")
+
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.IsError() {
+		return nil, fmt.Errorf("error getting agent groups: %s", resp.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(resp.Body(), &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// GetAgentDistinctStats retrieves distinct statistics for a specific field
+func (c *Client) GetAgentDistinctStats(field string) (interface{}, error) {
+	resp, err := c.ManagerRequest().
+		SetQueryParam("field", field).
+		Get("/agents/stats/distinct")
+
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.IsError() {
+		return nil, fmt.Errorf("error getting agent distinct stats: %s", resp.String())
 	}
 
 	var result map[string]interface{}

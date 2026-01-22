@@ -15,5 +15,4 @@ func RegisterTools(s *mcp.Server, client *wazuh.Client) {
 	registerClusterTools(s, client)
 	registerLogTools(s, client)
 	registerStatsTools(s, client)
-	registerSecurityTools(s, client)
 }
