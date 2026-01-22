@@ -24,79 +24,77 @@ jobs:
           fi
           echo "✅ Tag format is valid"
 
-      - name: Check version in Cargo.toml
+      - name: Validate Go module
         run: |
           TAG_VERSION=${GITHUB_REF#refs/tags/v}
           echo "Tag version: $TAG_VERSION"
-
-          CARGO_VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d '"' -f 2)
-          echo "Cargo.toml version: $CARGO_VERSION"
-
-          if [ "$CARGO_VERSION" != "$TAG_VERSION" ]; then
-            echo "❌ Version mismatch"
-            echo "   Tag version: $TAG_VERSION"
-            echo "   Cargo.toml version: $CARGO_VERSION"
+          
+          if [ ! -f "go.mod" ]; then
+            echo "❌ go.mod not found"
             exit 1
           fi
-
-          echo "✅ Version matches: $TAG_VERSION"
+          
+          echo "✅ Go module found"
 
   build_binaries:
-    name: Build Binaries for ${{ matrix.target }}
+    name: Build Binaries for ${{ matrix.goos }}/${{ matrix.goarch }}
     needs: validate_version
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
-          # Linux Intel (musl for static linking)
+          # Linux Intel
           - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
+            goos: linux
+            goarch: amd64
             asset_name_suffix: linux-amd64
             output_name: mcp-server-wazuh
 
           # Windows Intel
           - os: windows-latest
-            target: x86_64-pc-windows-msvc
+            goos: windows
+            goarch: amd64
             asset_name_suffix: windows-amd64.exe
             output_name: mcp-server-wazuh.exe
 
           # macOS Intel
           - os: macos-latest
-            target: x86_64-apple-darwin
+            goos: darwin
+            goarch: amd64
             asset_name_suffix: macos-amd64
             output_name: mcp-server-wazuh
 
           # macOS Apple Silicon
           - os: macos-14
-            target: aarch64-apple-darwin
+            goos: darwin
+            goarch: arm64
             asset_name_suffix: macos-arm64
             output_name: mcp-server-wazuh
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Rust for target ${{ matrix.target }}
-        uses: dtolnay/rust-toolchain@stable
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          targets: ${{ matrix.target }}
-
-      - name: Install musl-tools (Linux MUSL target only)
-        if: matrix.os == 'ubuntu-latest' && contains(matrix.target, 'musl')
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y musl-tools
+          go-version-file: go.mod
 
       - name: Build binary
-        run: cargo build --verbose --release --target ${{ matrix.target }}
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          go build -ldflags="-s -w" -o ${{ matrix.output_name }} .
 
       - name: Check dynamic dependencies (macOS only)
         if: matrix.os == 'macos-latest' || matrix.os == 'macos-14'
         run: |
           echo "=== Checking dynamic library dependencies ==="
-          otool -L ./target/${{ matrix.target }}/release/${{ matrix.output_name }} || true
+          otool -L ./${{ matrix.output_name }} || true
           echo ""
           echo "=== Checking for problematic dependencies ==="
-          if otool -L ./target/${{ matrix.target }}/release/${{ matrix.output_name }} | grep -E "(liblzma|/opt/homebrew|/usr/local)"; then
+          if otool -L ./${{ matrix.output_name }} | grep -E "(liblzma|/opt/homebrew|/usr/local)"; then
             echo "WARNING: Found dynamic dependencies that may cause issues with code signing"
           fi
 
@@ -178,10 +176,10 @@ jobs:
           echo "Using signing hash: $SIGNING_HASH"
 
           # Sign the binary using the SHA-1 hash
-          /usr/bin/codesign --force --sign "$SIGNING_HASH" --timestamp --options runtime ./target/${{ matrix.target }}/release/${{ matrix.output_name }} -v
+          /usr/bin/codesign --force --sign "$SIGNING_HASH" --timestamp --options runtime ./${{ matrix.output_name }} -v
 
           # Verify signature
-          /usr/bin/codesign --verify --verbose ./target/${{ matrix.target }}/release/${{ matrix.output_name }}
+          /usr/bin/codesign --verify --verbose ./${{ matrix.output_name }}
 
       - name: Notarize Binary (macOS only)
         if: matrix.os == 'macos-latest' || matrix.os == 'macos-14'
@@ -199,7 +197,7 @@ jobs:
           # Create zip file for notarization using ditto (preserves metadata better)
           echo "=== Creating zip file for notarization ==="
           ZIP_FILE="mcp-server-wazuh-${{ matrix.asset_name_suffix }}-notarization.zip"
-          ditto -c -k --sequesterRsrc --keepParent ./target/${{ matrix.target }}/release/${{ matrix.output_name }} "$ZIP_FILE"
+          ditto -c -k --sequesterRsrc --keepParent ./${{ matrix.output_name }} "$ZIP_FILE"
           echo "Created: $ZIP_FILE"
 
           # Submit for notarization
@@ -214,12 +212,12 @@ jobs:
           # Attempt to staple the notarization (will fail for command-line tools - this is expected)
           echo "=== Attempting to staple notarization ==="
           echo "Note: Stapling fails for command-line tools - this is normal"
-          xcrun stapler staple ./target/${{ matrix.target }}/release/${{ matrix.output_name }} || echo "Stapling failed (expected for command-line tools)"
+          xcrun stapler staple ./${{ matrix.output_name }} || echo "Stapling failed (expected for command-line tools)"
 
           # Final verification
           echo "=== Final signature and notarization verification ==="
-          codesign --verify --verbose ./target/${{ matrix.target }}/release/${{ matrix.output_name }}
-          spctl --assess --type execute --verbose ./target/${{ matrix.target }}/release/${{ matrix.output_name }} || echo "spctl assessment completed"
+          codesign --verify --verbose ./${{ matrix.output_name }}
+          spctl --assess --type execute --verbose ./${{ matrix.output_name }} || echo "spctl assessment completed"
 
           # Clean up files
           rm -f "$ZIP_FILE" "$API_KEY_FILE"
@@ -229,7 +227,7 @@ jobs:
       - name: Rename binary for upload
         shell: bash
         run: |
-          cp ./target/${{ matrix.target }}/release/${{ matrix.output_name }} mcp-server-wazuh-${{ matrix.asset_name_suffix }}
+          cp ./${{ matrix.output_name }} mcp-server-wazuh-${{ matrix.asset_name_suffix }}
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
@@ -258,7 +256,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/gbrigandi/mcp-server-wazuh
+          images: ghcr.io/ba0f3/mcp-server-wazuh
           tags: |
             type=ref,event=tag
             type=raw,value=latest
