@@ -147,4 +147,33 @@ func registerAlertTools(s *mcp.Server, client *wazuh.Client) {
 			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Security Events:\n%s", prettyJSON(events))}},
 		}, nil, nil
 	})
+
+	// get_top_security_threats
+	type TopThreatsInput struct {
+		Limit     int    `json:"limit,omitempty" jsonschema:"description:Maximum results (default: 10)"`
+		TimeRange string `json:"time_range,omitempty" jsonschema:"description:Time range (default: '24h')"`
+	}
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "get_top_security_threats",
+		Description: "Identify the top security threats currently active in the environment by analyzing alerts from the indexer",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, in TopThreatsInput) (*mcp.CallToolResult, any, error) {
+		limit := 10
+		if in.Limit > 0 {
+			limit = in.Limit
+		}
+		timeRange := "24h"
+		if in.TimeRange != "" {
+			timeRange = in.TimeRange
+		}
+		result, err := client.GetTopSecurityThreats(limit, timeRange)
+		if err != nil {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: %v", err)}},
+				IsError: true,
+			}, nil, nil
+		}
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Top Security Threats:\n%s", prettyJSON(result))}},
+		}, nil, nil
+	})
 }

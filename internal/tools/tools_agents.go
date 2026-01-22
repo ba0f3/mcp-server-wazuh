@@ -98,25 +98,10 @@ func registerAgentTools(s *mcp.Server, client *wazuh.Client) {
 		}, nil, nil
 	})
 
-	// check_agent_health
+	// get_agent_daemon_stats - moved to stats tools, but keeping agent info here
 	type AgentIDInput struct {
 		AgentID string `json:"agent_id" jsonschema:"description:Target agent ID"`
 	}
-	mcp.AddTool(s, &mcp.Tool{
-		Name:        "check_agent_health",
-		Description: "Verify the health status, connection, and synchronization of a specific agent",
-	}, func(ctx context.Context, request *mcp.CallToolRequest, in AgentIDInput) (*mcp.CallToolResult, any, error) {
-		health, err := client.CheckAgentHealth(in.AgentID)
-		if err != nil {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: %v", err)}},
-				IsError: true,
-			}, nil, nil
-		}
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Agent Health:\n%s", prettyJSON(health))}},
-		}, nil, nil
-	})
 
 	// get_agent_processes
 	type GetProcessesInput struct {
@@ -165,11 +150,16 @@ func registerAgentTools(s *mcp.Server, client *wazuh.Client) {
 	})
 
 	// get_agent_configuration
+	type GetAgentConfigInput struct {
+		AgentID      string `json:"agent_id" jsonschema:"description:Target agent ID"`
+		Component    string `json:"component" jsonschema:"description:Configuration component (e.g., 'agent', 'wodle', 'syscollector')"`
+		Configuration string `json:"configuration" jsonschema:"description:Configuration name (e.g., 'agent', 'wodle-syscollector')"`
+	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_agent_configuration",
-		Description: "Retrieve the active configuration of a specific agent",
-	}, func(ctx context.Context, request *mcp.CallToolRequest, in AgentIDInput) (*mcp.CallToolResult, any, error) {
-		config, err := client.GetAgentConfiguration(in.AgentID)
+		Description: "Retrieve the active configuration of a specific agent component. Requires component and configuration parameters.",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, in GetAgentConfigInput) (*mcp.CallToolResult, any, error) {
+		config, err := client.GetAgentConfiguration(in.AgentID, in.Component, in.Configuration)
 		if err != nil {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: %v", err)}},
@@ -178,6 +168,77 @@ func registerAgentTools(s *mcp.Server, client *wazuh.Client) {
 		}
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Agent Configuration:\n%s", prettyJSON(config))}},
+		}, nil, nil
+	})
+
+	// get_agent_summary_os
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "get_agent_summary_os",
+		Description: "Retrieve a summary of agents grouped by operating system",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, in struct{}) (*mcp.CallToolResult, any, error) {
+		summary, err := client.GetAgentSummaryOS()
+		if err != nil {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: %v", err)}},
+				IsError: true,
+			}, nil, nil
+		}
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Agent OS Summary:\n%s", prettyJSON(summary))}},
+		}, nil, nil
+	})
+
+	// get_agent_summary_status
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "get_agent_summary_status",
+		Description: "Retrieve a summary of agents grouped by status (active, disconnected, etc.)",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, in struct{}) (*mcp.CallToolResult, any, error) {
+		summary, err := client.GetAgentSummaryStatus()
+		if err != nil {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: %v", err)}},
+				IsError: true,
+			}, nil, nil
+		}
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Agent Status Summary:\n%s", prettyJSON(summary))}},
+		}, nil, nil
+	})
+
+	// get_agent_groups
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "get_agent_groups",
+		Description: "Retrieve a list of all agent groups",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, in struct{}) (*mcp.CallToolResult, any, error) {
+		groups, err := client.GetAgentGroups()
+		if err != nil {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: %v", err)}},
+				IsError: true,
+			}, nil, nil
+		}
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Agent Groups:\n%s", prettyJSON(groups))}},
+		}, nil, nil
+	})
+
+	// get_agent_distinct_stats
+	type DistinctStatsInput struct {
+		Field string `json:"field" jsonschema:"description:Field to get distinct values for (e.g., 'os.name', 'os.version', 'version')"`
+	}
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "get_agent_distinct_stats",
+		Description: "Retrieve distinct statistics for a specific agent field",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, in DistinctStatsInput) (*mcp.CallToolResult, any, error) {
+		stats, err := client.GetAgentDistinctStats(in.Field)
+		if err != nil {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: %v", err)}},
+				IsError: true,
+			}, nil, nil
+		}
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Agent Distinct Statistics:\n%s", prettyJSON(stats))}},
 		}, nil, nil
 	})
 }

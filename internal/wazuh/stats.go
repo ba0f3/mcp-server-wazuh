@@ -11,7 +11,7 @@ type ClusterHealth struct {
 }
 
 func (c *Client) GetClusterHealth() (*ClusterHealth, error) {
-	resp, err := c.ManagerRequest().Get("/cluster/status")
+	resp, err := c.ManagerRequest().Get("/cluster/health")
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,9 @@ func (c *Client) GetLogCollectorStats(agentID string) (interface{}, error) {
 		req.SetPathParams(map[string]string{"agent_id": agentID})
 		endpoint = "/agents/{agent_id}/stats/logcollector"
 	} else {
-		endpoint = "/manager/stats/logcollector"
+		// Use manager daemon stats instead of deprecated /manager/stats/logcollector
+		// The logcollector stats are included in the daemons stats response
+		endpoint = "/manager/daemons/stats"
 	}
 
 	resp, err := req.Get(endpoint)
@@ -145,27 +147,16 @@ func (c *Client) GetLogCollectorStats(agentID string) (interface{}, error) {
 		return nil, err
 	}
 
-	return result, nil
-}
-
-func (c *Client) GetRemotedStats() (interface{}, error) {
-	resp, err := c.ManagerRequest().Get("/manager/stats/remoted")
-
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.IsError() {
-		return nil, fmt.Errorf("error getting remoted stats: %s", resp.String())
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(resp.Body(), &result); err != nil {
-		return nil, err
+	// If we used manager daemon stats, extract logcollector-specific data if available
+	if agentID == "" {
+		// The response structure may vary, but we return the full daemon stats
+		// which includes logcollector information
+		return result, nil
 	}
 
 	return result, nil
 }
+
 
 func (c *Client) GetWeeklyStats() (interface{}, error) {
 	resp, err := c.ManagerRequest().Get("/manager/stats/weekly")
@@ -186,15 +177,38 @@ func (c *Client) GetWeeklyStats() (interface{}, error) {
 	return result, nil
 }
 
-func (c *Client) GetWazuhStatistics() (interface{}, error) {
-	resp, err := c.ManagerRequest().Get("/manager/stats/all")
+// GetManagerDaemonStats retrieves manager daemon statistics (replaces deprecated /manager/stats/all)
+func (c *Client) GetManagerDaemonStats() (interface{}, error) {
+	resp, err := c.ManagerRequest().Get("/manager/daemons/stats")
 
 	if err != nil {
 		return nil, err
 	}
 
 	if resp.IsError() {
-		return nil, fmt.Errorf("error getting wazuh statistics: %s", resp.String())
+		return nil, fmt.Errorf("error getting manager daemon stats: %s", resp.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(resp.Body(), &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// GetAgentDaemonStats retrieves daemon statistics for a specific agent
+func (c *Client) GetAgentDaemonStats(agentID string) (interface{}, error) {
+	resp, err := c.ManagerRequest().
+		SetPathParams(map[string]string{"agent_id": agentID}).
+		Get("/agents/{agent_id}/daemons/stats")
+
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.IsError() {
+		return nil, fmt.Errorf("error getting agent daemon stats: %s", resp.String())
 	}
 
 	var result map[string]interface{}
