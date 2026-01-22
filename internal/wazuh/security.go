@@ -3,6 +3,7 @@ package wazuh
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 )
 
 func (c *Client) AnalyzeSecurityThreat(indicator string, indicatorType string) (interface{}, error) {
@@ -81,37 +82,93 @@ func (c *Client) PerformRiskAssessment(agentID string) (interface{}, error) {
 	return result, nil
 }
 
+type ThreatEntry struct {
+	RuleID      float64
+	Level       float64
+	Description string
+	Count       int
+}
+
 func (c *Client) GetTopSecurityThreats(limit int, timeRange string) (interface{}, error) {
-	params := map[string]string{
-		"limit": fmt.Sprintf("%d", limit),
-	}
-	if timeRange != "" {
-		params["time_range"] = timeRange
-	}
-
-	resp, err := c.ManagerRequest().
-		SetQueryParams(params).
-		Get("/security/threats/top")
-
+	// Parse time range to get timestamp boundaries
+	timestampStart, timestampEnd, err := parseTimeRange(timeRange)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error parsing time range: %w", err)
 	}
-
-	if resp.IsError() {
-		return nil, fmt.Errorf("error getting top security threats: %s", resp.String())
+	// Query alerts from the indexer, focusing on higher severity alerts (level >= 7)
+	alerts, err := c.GetAlerts(10000, "", "", "", timestampStart, timestampEnd)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching alerts for threat analysis: %w", err)
 	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(resp.Body(), &result); err != nil {
-		return nil, err
+	// Aggregate threats by rule ID, prioritizing higher severity
+	threatMap := make(map[string]*ThreatEntry)
+	for _, alert := range alerts {
+		source, ok := alert["_source"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		rule, ok := source["rule"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		ruleID, ok := rule["id"].(float64)
+		if !ok {
+			continue
+		}
+		ruleLevel, _ := rule["level"].(float64)
+		// Focus on medium to critical severity (level >= 7)
+		if ruleLevel < 7 {
+			continue
+		}
+		ruleIDStr := fmt.Sprintf("%.0f", ruleID)
+		if threatMap[ruleIDStr] == nil {
+			description, _ := rule["description"].(string)
+			threatMap[ruleIDStr] = &ThreatEntry{
+				RuleID:      ruleID,
+				Level:       ruleLevel,
+				Description: description,
+				Count:       0,
+			}
+		}
+		threatMap[ruleIDStr].Count++
 	}
-
+	// Convert to slice and sort by count (descending), then by level (descending)
+	threats := make([]*ThreatEntry, 0, len(threatMap))
+	for _, threat := range threatMap {
+		threats = append(threats, threat)
+	}
+	sort.Slice(threats, func(i, j int) bool {
+		if threats[i].Count != threats[j].Count {
+			return threats[i].Count > threats[j].Count
+		}
+		return threats[i].Level > threats[j].Level
+	})
+	// Limit results
+	if limit > 0 && len(threats) > limit {
+		threats = threats[:limit]
+	}
+	// Format response
+	threatList := make([]map[string]interface{}, len(threats))
+	for i, threat := range threats {
+		threatList[i] = map[string]interface{}{
+			"rule_id":     threat.RuleID,
+			"level":       threat.Level,
+			"description": threat.Description,
+			"occurrences": threat.Count,
+		}
+	}
+	result := map[string]interface{}{
+		"time_range": timeRange,
+		"limit":      limit,
+		"total":      len(threatList),
+		"threats":    threatList,
+	}
 	return result, nil
 }
 
 func (c *Client) GenerateSecurityReport(reportType string, includeRecommendations bool) (interface{}, error) {
 	body := map[string]interface{}{
-		"type":                   reportType,
+		"type":                    reportType,
 		"include_recommendations": includeRecommendations,
 	}
 

@@ -3,6 +3,9 @@ package wazuh
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strconv"
+	"time"
 )
 
 func (c *Client) GetAlerts(limit int, ruleID, level, agentID, timestampStart, timestampEnd string) ([]map[string]interface{}, error) {
@@ -105,63 +108,169 @@ func (c *Client) GetAlertSummary(timeRange string, groupBy string) (interface{},
 	return result, nil
 }
 
-func (c *Client) AnalyzeAlertPatterns(timeRange string, minFrequency int) (interface{}, error) {
-	params := map[string]string{
-		"min_frequency": fmt.Sprintf("%d", minFrequency),
+// parseTimeRange converts a time range string (e.g., "24h", "7d") to start and end timestamps
+func parseTimeRange(timeRange string) (string, string, error) {
+	if timeRange == "" {
+		timeRange = "24h"
 	}
-	if timeRange != "" {
-		params["time_range"] = timeRange
+	now := time.Now()
+	var duration time.Duration
+	re := regexp.MustCompile(`^(\d+)([hdms])$`)
+	matches := re.FindStringSubmatch(timeRange)
+	if len(matches) != 3 {
+		return "", "", fmt.Errorf("invalid time range format: %s (expected format: 24h, 7d, etc.)", timeRange)
 	}
-
-	// NOTE: This endpoint might not be available in all Wazuh versions.
-	resp, err := c.ManagerRequest().
-		SetQueryParams(params).
-		Get("/alerts/patterns")
-
+	value, err := strconv.Atoi(matches[1])
 	if err != nil {
-		return nil, err
+		return "", "", fmt.Errorf("invalid time range value: %s", timeRange)
 	}
-
-	if resp.IsError() {
-		return nil, fmt.Errorf("error analyzing alert patterns: %s", resp.String())
+	unit := matches[2]
+	switch unit {
+	case "h":
+		duration = time.Duration(value) * time.Hour
+	case "d":
+		duration = time.Duration(value) * 24 * time.Hour
+	case "m":
+		duration = time.Duration(value) * time.Minute
+	case "s":
+		duration = time.Duration(value) * time.Second
+	default:
+		return "", "", fmt.Errorf("invalid time range unit: %s (expected: h, d, m, s)", unit)
 	}
+	startTime := now.Add(-duration)
+	return startTime.Format(time.RFC3339), now.Format(time.RFC3339), nil
+}
 
-	var result map[string]interface{}
-	if err := json.Unmarshal(resp.Body(), &result); err != nil {
-		return nil, err
+func (c *Client) AnalyzeAlertPatterns(timeRange string, minFrequency int) (interface{}, error) {
+	// Parse time range to get timestamp boundaries
+	timestampStart, timestampEnd, err := parseTimeRange(timeRange)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing time range: %w", err)
 	}
-
+	// Query alerts from the indexer
+	alerts, err := c.GetAlerts(10000, "", "", "", timestampStart, timestampEnd)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching alerts for pattern analysis: %w", err)
+	}
+	// Analyze patterns: group by rule ID and count occurrences
+	patternMap := make(map[string]map[string]interface{})
+	for _, alert := range alerts {
+		source, ok := alert["_source"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		rule, ok := source["rule"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		ruleID, ok := rule["id"].(float64)
+		if !ok {
+			continue
+		}
+		ruleIDStr := fmt.Sprintf("%.0f", ruleID)
+		if patternMap[ruleIDStr] == nil {
+			patternMap[ruleIDStr] = map[string]interface{}{
+				"rule_id":     ruleID,
+				"description": rule["description"],
+				"level":       rule["level"],
+				"frequency":   0,
+			}
+		}
+		freq, _ := patternMap[ruleIDStr]["frequency"].(int)
+		patternMap[ruleIDStr]["frequency"] = freq + 1
+	}
+	// Filter by minimum frequency and convert to list
+	patterns := []map[string]interface{}{}
+	for _, pattern := range patternMap {
+		freq, _ := pattern["frequency"].(int)
+		if freq >= minFrequency {
+			patterns = append(patterns, pattern)
+		}
+	}
+	result := map[string]interface{}{
+		"time_range":     timeRange,
+		"min_frequency":  minFrequency,
+		"total_alerts":   len(alerts),
+		"patterns_found": len(patterns),
+		"patterns":       patterns,
+	}
 	return result, nil
 }
 
 func (c *Client) SearchSecurityEvents(query string, timeRange string, limit int) (interface{}, error) {
-	params := map[string]string{
-		"limit": fmt.Sprintf("%d", limit),
+	// Parse time range to get timestamp boundaries
+	timestampStart, timestampEnd, err := parseTimeRange(timeRange)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing time range: %w", err)
 	}
-	if query != "" {
-		params["q"] = query
+	// Build query clauses
+	mustClauses := []map[string]interface{}{}
+	// Add time range filter
+	mustClauses = append(mustClauses, map[string]interface{}{
+		"range": map[string]interface{}{
+			"timestamp": map[string]interface{}{
+				"gte": timestampStart,
+				"lte": timestampEnd,
+			},
+		},
+	})
+	// If query is provided, add a multi-match query for common fields
+	if query != "" && query != "*" {
+		mustClauses = append(mustClauses, map[string]interface{}{
+			"multi_match": map[string]interface{}{
+				"query":  query,
+				"fields": []string{"rule.description", "rule.id", "agent.name", "data.srcip", "data.dstip", "full_log"},
+				"type":   "best_fields",
+			},
+		})
 	}
-	if timeRange != "" {
-		params["time_range"] = timeRange
+	// Build the query
+	var esQuery map[string]interface{}
+	if len(mustClauses) > 0 {
+		esQuery = map[string]interface{}{
+			"bool": map[string]interface{}{
+				"must": mustClauses,
+			},
+		}
+	} else {
+		esQuery = map[string]interface{}{"match_all": map[string]interface{}{}}
 	}
-
-	// NOTE: This endpoint might not be available in all Wazuh versions.
-	resp, err := c.ManagerRequest().
-		SetQueryParams(params).
-		Get("/security/events")
-
+	// Build request body
+	body := map[string]interface{}{
+		"query": esQuery,
+		"size":  limit,
+		"sort": []map[string]interface{}{
+			{"timestamp": map[string]interface{}{"order": "desc"}},
+		},
+	}
+	// Execute search against indexer
+	resp, err := c.IndexerRequest().
+		SetBody(body).
+		Post("/wazuh-alerts-*/_search")
 	if err != nil {
 		return nil, err
 	}
-
 	if resp.IsError() {
 		return nil, fmt.Errorf("error searching security events: %s", resp.String())
 	}
-
-	var result map[string]interface{}
+	var result struct {
+		Hits struct {
+			Total struct {
+				Value int `json:"value"`
+			} `json:"total"`
+			Hits []map[string]interface{} `json:"hits"`
+		} `json:"hits"`
+	}
 	if err := json.Unmarshal(resp.Body(), &result); err != nil {
 		return nil, err
 	}
-
-	return result, nil
+	// Format response
+	formattedResult := map[string]interface{}{
+		"query":      query,
+		"time_range": timeRange,
+		"total":      result.Hits.Total.Value,
+		"returned":   len(result.Hits.Hits),
+		"events":     result.Hits.Hits,
+	}
+	return formattedResult, nil
 }
