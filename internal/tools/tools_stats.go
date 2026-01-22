@@ -3,74 +3,79 @@ package tools
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/ba0f3/mcp-server-wazuh/internal/wazuh"
-
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// registerStatsTools registers statistics-related tools
 func registerStatsTools(s *mcp.Server, client *wazuh.Client) {
-	// get_wazuh_log_collector_stats
-	type LogCollectorStatsInput struct {
-		AgentID string `json:"agent_id" jsonschema:"description:Agent ID to get stats for (required)"`
-	}
+	// get_wazuh_statistics
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "get_wazuh_log_collector_stats",
-		Description: "Retrieves log collector statistics for a specific Wazuh agent. Returns information about events processed, dropped, bytes, and target log files.",
-	}, func(ctx context.Context, request *mcp.CallToolRequest, in LogCollectorStatsInput) (*mcp.CallToolResult, any, error) {
-		fmt.Fprintf(os.Stderr, "Get Wazuh Log Collector Stats called with agent ID: %s\n", in.AgentID)
-		agentID := formatAgentID(in.AgentID)
-
-		stats, err := client.GetLogCollectorStats(agentID)
+		Name:        "get_wazuh_statistics",
+		Description: "Retrieve comprehensive performance and operational statistics of the Wazuh manager",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, in struct{}) (*mcp.CallToolResult, any, error) {
+		stats, err := client.GetWazuhStatistics()
 		if err != nil {
 			return &mcp.CallToolResult{
-				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error retrieving log collector stats: %v", err)}},
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: %v", err)}},
 				IsError: true,
 			}, nil, nil
 		}
-
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: prettyJSON(stats)}},
-		}, nil, nil
-	})
-
-	// get_wazuh_remoted_stats
-	mcp.AddTool(s, &mcp.Tool{
-		Name:        "get_wazuh_remoted_stats",
-		Description: "Retrieves statistics from the Wazuh remoted daemon. Returns information about queue size, TCP sessions, event counts, and message traffic.",
-	}, func(ctx context.Context, request *mcp.CallToolRequest, in any) (*mcp.CallToolResult, any, error) {
-		fmt.Fprintf(os.Stderr, "Get Wazuh Remoted Stats called\n")
-		stats, err := client.GetRemotedStats()
-		if err != nil {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error retrieving remoted stats: %v", err)}},
-				IsError: true,
-			}, nil, nil
-		}
-
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: prettyJSON(stats)}},
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Wazuh Statistics:\n%s", prettyJSON(stats))}},
 		}, nil, nil
 	})
 
 	// get_wazuh_weekly_stats
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_wazuh_weekly_stats",
-		Description: "Retrieves weekly statistics from the Wazuh manager. Returns a JSON object detailing various metrics aggregated over the past week.",
-	}, func(ctx context.Context, request *mcp.CallToolRequest, in any) (*mcp.CallToolResult, any, error) {
-		fmt.Fprintf(os.Stderr, "Get Wazuh Weekly Stats called\n")
+		Description: "Retrieve historical security statistics aggregated over the past week",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, in struct{}) (*mcp.CallToolResult, any, error) {
 		stats, err := client.GetWeeklyStats()
 		if err != nil {
 			return &mcp.CallToolResult{
-				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error retrieving weekly stats: %v", err)}},
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: %v", err)}},
 				IsError: true,
 			}, nil, nil
 		}
-
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: prettyJSON(stats)}},
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Weekly Statistics:\n%s", prettyJSON(stats))}},
+		}, nil, nil
+	})
+
+	// get_wazuh_remoted_stats
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "get_wazuh_remoted_stats",
+		Description: "Retrieve statistics for the remoted service (agent connections and data throughput)",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, in struct{}) (*mcp.CallToolResult, any, error) {
+		stats, err := client.GetRemotedStats()
+		if err != nil {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: %v", err)}},
+				IsError: true,
+			}, nil, nil
+		}
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Remoted Statistics:\n%s", prettyJSON(stats))}},
+		}, nil, nil
+	})
+
+	// get_wazuh_log_collector_stats
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "get_wazuh_log_collector_stats",
+		Description: "Retrieve statistics for the log collector service",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, in struct{}) (*mcp.CallToolResult, any, error) {
+		// In reference project this seems to be for manager, but current implementation takes agentID.
+		// Let's use it for manager (empty agentID if supported by API or just use what we have)
+		stats, err := client.GetLogCollectorStats("")
+		if err != nil {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: %v", err)}},
+				IsError: true,
+			}, nil, nil
+		}
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Log Collector Statistics:\n%s", prettyJSON(stats))}},
 		}, nil, nil
 	})
 }

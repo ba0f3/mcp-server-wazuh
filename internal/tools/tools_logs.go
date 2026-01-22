@@ -3,84 +3,75 @@ package tools
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/ba0f3/mcp-server-wazuh/internal/wazuh"
-
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// registerLogTools registers log-related tools
 func registerLogTools(s *mcp.Server, client *wazuh.Client) {
 	// search_wazuh_manager_logs
-	type SearchManagerLogsInput struct {
-		Limit  int    `json:"limit,omitempty" jsonschema:"description:Maximum number of logs to retrieve (default: 300)"`
-		Offset int    `json:"offset,omitempty" jsonschema:"description:Offset for pagination (default: 0)"`
-		Level  string `json:"level,omitempty" jsonschema:"description:Log level to filter by (optional)"`
-		Tag    string `json:"tag,omitempty" jsonschema:"description:Log tag to filter by (optional)"`
-		Search string `json:"search,omitempty" jsonschema:"description:Search string to filter logs (optional)"`
+	type SearchLogsInput struct {
+		Query string `json:"query" jsonschema:"description:Search query for manager logs"`
+		Limit int    `json:"limit,omitempty" jsonschema:"description:Maximum results (default: 100)"`
 	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "search_wazuh_manager_logs",
-		Description: "Searches Wazuh manager logs. Returns formatted log entries including timestamp, tag, level, and description. Supports filtering by limit, offset, level, tag, and a search term.",
-	}, func(ctx context.Context, request *mcp.CallToolRequest, in SearchManagerLogsInput) (*mcp.CallToolResult, any, error) {
-		fmt.Fprintf(os.Stderr, "Search Wazuh Manager Logs called with limit: %d, offset: %d, level: %s, tag: %s, search: %s\n", in.Limit, in.Offset, in.Level, in.Tag, in.Search)
-		limit := 300
+		Description: "Perform search across Wazuh manager internal logs for troubleshooting",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, in SearchLogsInput) (*mcp.CallToolResult, any, error) {
+		limit := 100
 		if in.Limit > 0 {
 			limit = in.Limit
 		}
-
-		logs, err := client.GetManagerLogs(limit, in.Offset, in.Level, in.Tag, in.Search)
+		logs, err := client.GetManagerLogs(limit, 0, "", "", in.Query)
 		if err != nil {
 			return &mcp.CallToolResult{
-				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error retrieving manager logs: %v", err)}},
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: %v", err)}},
 				IsError: true,
 			}, nil, nil
 		}
-
-		if len(logs) == 0 {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{&mcp.TextContent{Text: "No manager logs found matching the specified criteria."}},
-			}, nil, nil
-		}
-
-		var items []mcp.Content
-		for _, log := range logs {
-			formattedText := fmt.Sprintf("Timestamp: %s\nTag: %s\nLevel: %s\nDescription: %s",
-				log.Timestamp, log.Tag, log.Level, log.Description)
-			items = append(items, &mcp.TextContent{Text: formattedText})
-		}
-
-		return &mcp.CallToolResult{Content: items}, nil, nil
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Manager Logs:\n%s", prettyJSON(logs))}},
+		}, nil, nil
 	})
 
 	// get_wazuh_manager_error_logs
+	type LimitInput struct {
+		Limit int `json:"limit,omitempty" jsonschema:"description:Maximum results (default: 50)"`
+	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_wazuh_manager_error_logs",
-		Description: "Retrieves Wazuh manager error logs. Returns formatted log entries including timestamp, tag, level (error), and description.",
-	}, func(ctx context.Context, request *mcp.CallToolRequest, in any) (*mcp.CallToolResult, any, error) {
-		fmt.Fprintf(os.Stderr, "Get Wazuh Manager Error Logs called\n")
-		logs, err := client.GetManagerLogs(300, 0, "error", "", "")
+		Description: "Specifically retrieve error-level logs from the Wazuh manager",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, in LimitInput) (*mcp.CallToolResult, any, error) {
+		limit := 50
+		if in.Limit > 0 {
+			limit = in.Limit
+		}
+		logs, err := client.GetManagerLogs(limit, 0, "error", "", "")
 		if err != nil {
 			return &mcp.CallToolResult{
-				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error retrieving manager error logs: %v", err)}},
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: %v", err)}},
 				IsError: true,
 			}, nil, nil
 		}
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Manager Error Logs:\n%s", prettyJSON(logs))}},
+		}, nil, nil
+	})
 
-		if len(logs) == 0 {
+	// validate_wazuh_connection
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "validate_wazuh_connection",
+		Description: "Verify the connection and authentication between the MCP server and Wazuh API",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, in struct{}) (*mcp.CallToolResult, any, error) {
+		result, err := client.ValidateConnection()
+		if err != nil {
 			return &mcp.CallToolResult{
-				Content: []mcp.Content{&mcp.TextContent{Text: "No manager error logs found."}},
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: %v", err)}},
+				IsError: true,
 			}, nil, nil
 		}
-
-		var items []mcp.Content
-		for _, log := range logs {
-			formattedText := fmt.Sprintf("Timestamp: %s\nTag: %s\nLevel: %s\nDescription: %s",
-				log.Timestamp, log.Tag, log.Level, log.Description)
-			items = append(items, &mcp.TextContent{Text: formattedText})
-		}
-
-		return &mcp.CallToolResult{Content: items}, nil, nil
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Connection Validation:\n%s", prettyJSON(result))}},
+		}, nil, nil
 	})
 }
