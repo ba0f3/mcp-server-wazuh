@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -29,25 +30,36 @@ func main() {
 
 	verifySSL := getEnv("WAZUH_VERIFY_SSL", "false") == "true"
 
-	client := wazuh.NewClient(apiHost, apiPort, apiUsername, apiPassword, indexerHost, indexerPort, indexerUsername, indexerPassword, verifySSL)
+	transport := getEnv("MCP_SERVER_TRANSPORT", "stdio")
 
-	s := mcp.NewServer(
-		&mcp.Implementation{
-			Name:    "mcp-server-wazuh",
-			Version: "0.3.0",
-		},
-		&mcp.ServerOptions{
-			Capabilities: &mcp.ServerCapabilities{
-				Tools: &mcp.ToolCapabilities{},
-			},
-		},
-	)
+	host := getEnv("MCP_SERVER_HOST", "localhost")
+	port, _ := strconv.Atoi(getEnv("MCP_SERVER_PORT", "8000"))
+
+	client := wazuh.NewClient(apiHost, apiPort, apiUsername, apiPassword, indexerHost, indexerPort, indexerUsername, indexerPassword, verifySSL)
+	s := mcp.NewServer(&mcp.Implementation{Name: "mcp-server-wazuh", Version: "0.3.0"}, nil)
 
 	registerTools(s, client)
 
-	if err := s.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
-		fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
-		os.Exit(1)
+	if transport == "http" {
+		// Create the streamable HTTP handler.
+		handler := mcp.NewStreamableHTTPHandler(func(req *http.Request) *mcp.Server {
+			return s
+		}, nil)
+
+		url := fmt.Sprintf("%s:%d", host, port)
+
+		fmt.Fprintf(os.Stderr, "MCP server listening on %s\n", url)
+
+		// Start the HTTP server.
+		if err := http.ListenAndServe(url, handler); err != nil {
+			fmt.Fprintf(os.Stderr, "Server failed: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		if err := s.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
+			fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
+			os.Exit(1)
+		}
 	}
 }
 
@@ -67,6 +79,7 @@ func registerTools(s *mcp.Server, client *wazuh.Client) {
 		Name:        "get_wazuh_alert_summary",
 		Description: "Retrieves a summary of Wazuh security alerts. Returns formatted alert information including ID, timestamp, and description.",
 	}, func(ctx context.Context, request *mcp.CallToolRequest, in AlertSummaryInput) (*mcp.CallToolResult, any, error) {
+		fmt.Fprintf(os.Stderr, "Get Wazuh Alert Summary called with limit: %d\n", in.Limit)
 		limit := 300
 		if in.Limit > 0 {
 			limit = in.Limit
@@ -174,6 +187,7 @@ func registerTools(s *mcp.Server, client *wazuh.Client) {
 		Name:        "get_wazuh_rules_summary",
 		Description: "Retrieves a summary of Wazuh security rules. Returns formatted rule information including ID, level, description, and groups. Supports filtering by level, group, and filename.",
 	}, func(ctx context.Context, request *mcp.CallToolRequest, in RulesSummaryInput) (*mcp.CallToolResult, any, error) {
+		fmt.Fprintf(os.Stderr, "Get Wazuh Rules Summary called with limit: %d, level: %d, group: %s, filename: %s\n", in.Limit, in.Level, in.Group, in.Filename)
 		limit := 300
 		if in.Limit > 0 {
 			limit = in.Limit
@@ -250,6 +264,7 @@ func registerTools(s *mcp.Server, client *wazuh.Client) {
 		Name:        "get_wazuh_vulnerability_summary",
 		Description: "Retrieves a summary of Wazuh vulnerability detections for a specific agent. Returns formatted vulnerability information including CVE ID, severity, detection time, and agent details. Supports filtering by severity level.",
 	}, func(ctx context.Context, request *mcp.CallToolRequest, in VulnerabilitySummaryInput) (*mcp.CallToolResult, any, error) {
+		fmt.Fprintf(os.Stderr, "Get Wazuh Vulnerability Summary called with agent ID: %s, limit: %d, severity: %s, CVE: %s\n", in.AgentID, in.Limit, in.Severity, in.CVE)
 		agentID := formatAgentID(in.AgentID)
 
 		limit := 10000
@@ -344,6 +359,7 @@ func registerTools(s *mcp.Server, client *wazuh.Client) {
 		Name:        "get_wazuh_critical_vulnerabilities",
 		Description: "Retrieves critical vulnerabilities for a specific Wazuh agent. Returns formatted vulnerability information including CVE ID, title, description, CVSS scores, and detection details. Only shows vulnerabilities with 'Critical' severity level.",
 	}, func(ctx context.Context, request *mcp.CallToolRequest, in CriticalVulnerabilitiesInput) (*mcp.CallToolResult, any, error) {
+		fmt.Fprintf(os.Stderr, "Get Wazuh Critical Vulnerabilities called with agent ID: %s, limit: %d\n", in.AgentID, in.Limit)
 		agentID := formatAgentID(in.AgentID)
 
 		limit := 300
@@ -427,6 +443,7 @@ func registerTools(s *mcp.Server, client *wazuh.Client) {
 		Name:        "get_wazuh_agents",
 		Description: "Retrieves a list of Wazuh agents with their current status and details. Returns formatted agent information including ID, name, IP, status, OS details, and last activity. Supports filtering by status, name, IP, group, OS platform, and version.",
 	}, func(ctx context.Context, request *mcp.CallToolRequest, in AgentsInput) (*mcp.CallToolResult, any, error) {
+		fmt.Fprintf(os.Stderr, "Get Wazuh Agents called with limit: %d, status: %s, name: %s, IP: %s, group: %s, OS platform: %s, version: %s\n", in.Limit, in.Status, in.Name, in.IP, in.Group, in.OSPlatform, in.Version)
 		limit := 300
 		if in.Limit > 0 {
 			limit = in.Limit
@@ -666,6 +683,7 @@ func registerTools(s *mcp.Server, client *wazuh.Client) {
 		Name:        "search_wazuh_manager_logs",
 		Description: "Searches Wazuh manager logs. Returns formatted log entries including timestamp, tag, level, and description. Supports filtering by limit, offset, level, tag, and a search term.",
 	}, func(ctx context.Context, request *mcp.CallToolRequest, in SearchManagerLogsInput) (*mcp.CallToolResult, any, error) {
+		fmt.Fprintf(os.Stderr, "Search Wazuh Manager Logs called with limit: %d, offset: %d, level: %s, tag: %s, search: %s\n", in.Limit, in.Offset, in.Level, in.Tag, in.Search)
 		limit := 300
 		if in.Limit > 0 {
 			limit = in.Limit
@@ -700,6 +718,7 @@ func registerTools(s *mcp.Server, client *wazuh.Client) {
 		Name:        "get_wazuh_manager_error_logs",
 		Description: "Retrieves Wazuh manager error logs. Returns formatted log entries including timestamp, tag, level (error), and description.",
 	}, func(ctx context.Context, request *mcp.CallToolRequest, in any) (*mcp.CallToolResult, any, error) {
+		fmt.Fprintf(os.Stderr, "Get Wazuh Manager Error Logs called\n")
 		logs, err := client.GetManagerLogs(300, 0, "error", "", "")
 		if err != nil {
 			return &mcp.CallToolResult{
@@ -732,6 +751,7 @@ func registerTools(s *mcp.Server, client *wazuh.Client) {
 		Name:        "get_wazuh_log_collector_stats",
 		Description: "Retrieves log collector statistics for a specific Wazuh agent. Returns information about events processed, dropped, bytes, and target log files.",
 	}, func(ctx context.Context, request *mcp.CallToolRequest, in LogCollectorStatsInput) (*mcp.CallToolResult, any, error) {
+		fmt.Fprintf(os.Stderr, "Get Wazuh Log Collector Stats called with agent ID: %s\n", in.AgentID)
 		agentID := formatAgentID(in.AgentID)
 
 		stats, err := client.GetLogCollectorStats(agentID)
@@ -752,6 +772,7 @@ func registerTools(s *mcp.Server, client *wazuh.Client) {
 		Name:        "get_wazuh_remoted_stats",
 		Description: "Retrieves statistics from the Wazuh remoted daemon. Returns information about queue size, TCP sessions, event counts, and message traffic.",
 	}, func(ctx context.Context, request *mcp.CallToolRequest, in any) (*mcp.CallToolResult, any, error) {
+		fmt.Fprintf(os.Stderr, "Get Wazuh Remoted Stats called\n")
 		stats, err := client.GetRemotedStats()
 		if err != nil {
 			return &mcp.CallToolResult{
@@ -776,6 +797,7 @@ func registerTools(s *mcp.Server, client *wazuh.Client) {
 		Name:        "get_wazuh_agent_ports",
 		Description: "Retrieves a list of open network ports for a specific Wazuh agent. Returns formatted port information including local/remote IP and port, protocol, state, and associated process/PID. Supports filtering by protocol and state.",
 	}, func(ctx context.Context, request *mcp.CallToolRequest, in AgentPortsInput) (*mcp.CallToolResult, any, error) {
+		fmt.Fprintf(os.Stderr, "Get Wazuh Agent Ports called with agent ID: %s, limit: %d, protocol: %s, state: %s\n", in.AgentID, in.Limit, in.Protocol, in.State)
 		agentID := formatAgentID(in.AgentID)
 
 		limit := 300
@@ -856,6 +878,7 @@ func registerTools(s *mcp.Server, client *wazuh.Client) {
 		Name:        "get_wazuh_weekly_stats",
 		Description: "Retrieves weekly statistics from the Wazuh manager. Returns a JSON object detailing various metrics aggregated over the past week.",
 	}, func(ctx context.Context, request *mcp.CallToolRequest, in any) (*mcp.CallToolResult, any, error) {
+		fmt.Fprintf(os.Stderr, "Get Wazuh Weekly Stats called\n")
 		stats, err := client.GetWeeklyStats()
 		if err != nil {
 			return &mcp.CallToolResult{

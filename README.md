@@ -1,6 +1,8 @@
 # Wazuh MCP Server - Talk to your SIEM
 
-A Rust-based server designed to bridge the gap between a Wazuh Security Information and Event Management (SIEM) system and applications requiring contextual security data, specifically tailored for the Claude Desktop Integration using the Model Context Protocol (MCP).
+A Go-based server (ported from Rust) designed to bridge the gap between a Wazuh Security Information and Event Management (SIEM) system and applications requiring contextual security data, specifically tailored for the Claude Desktop Integration using the Model Context Protocol (MCP).
+
+> **Note:** This project is a fork of [gbrigandi/mcp-server-wazuh](https://github.com/gbrigandi/mcp-server-wazuh), which was originally written in Rust. This Go port maintains feature parity with the original while providing improved maintainability and cross-platform compatibility.
 
 ## Overview
 
@@ -106,7 +108,7 @@ For enhanced threat intelligence and incident response capabilities, the Wazuh M
 ### Option 1: Download Pre-built Binary (Recommended)
 
 1.  **Download the Binary:**
-    *   Go to the [Releases page](https://github.com/gbrigandi/mcp-server-wazuh/releases) of the `mcp-server-wazuh` GitHub repository.
+    *   Go to the [Releases page](https://github.com/ba0f3/mcp-server-wazuh/releases) of the `mcp-server-wazuh` GitHub repository.
     *   Download the appropriate binary for your operating system (e.g., `mcp-server-wazuh-linux-amd64`, `mcp-server-wazuh-macos-amd64`, `mcp-server-wazuh-macos-arm64`, `mcp-server-wazuh-windows-amd64.exe`).
     *   Make the downloaded binary executable (e.g., `chmod +x mcp-server-wazuh-linux-amd64`).
     *   (Optional) Rename it to something simpler like `mcp-server-wazuh` and move it to a directory in your system's `PATH` for easier access.
@@ -115,26 +117,23 @@ For enhanced threat intelligence and incident response capabilities, the Wazuh M
 
 1.  **Pull the Docker Image:**
     ```bash
-    docker pull ghcr.io/gbrigandi/mcp-server-wazuh:latest
+    docker pull ghcr.io/ba0f3/mcp-server-wazuh:latest
     ```
 
 ### Option 3: Build from Source
 
 1.  **Prerequisites:**
-    *   Install Rust: [https://www.rust-lang.org/tools/install](https://www.rust-lang.org/tools/install)
+    *   Install Go 1.25 or later: [https://go.dev/doc/install](https://go.dev/doc/install)
 
 2.  **Build:**
     ```bash
-    git clone https://github.com/gbrigandi/mcp-server-wazuh.git
+    git clone https://github.com/ba0f3/mcp-server-wazuh.git
     cd mcp-server-wazuh
 
-    # Build with stdio transport only (default)
-    cargo build --release
-
-    # Build with HTTP transport support
-    cargo build --release --features http
+    # Build the binary
+    go build -o mcp-server-wazuh .
     ```
-    The binary will be available at `target/release/mcp-server-wazuh`.
+    The binary will be available as `mcp-server-wazuh` in the current directory.
 
 ### Configure Your LLM Client
 
@@ -160,8 +159,7 @@ Configure your `claude_desktop_config.json` file:
         "WAZUH_INDEXER_USERNAME": "your_wazuh_indexer_user",
         "WAZUH_INDEXER_PASSWORD": "your_wazuh_indexer_password",
         "WAZUH_VERIFY_SSL": "false",
-        "WAZUH_TEST_PROTOCOL": "https",
-        "RUST_LOG": "info"
+        "WAZUH_TEST_PROTOCOL": "https"
       }
     }
   }
@@ -185,7 +183,6 @@ WAZUH_INDEXER_USERNAME=your_wazuh_indexer_user
 WAZUH_INDEXER_PASSWORD=your_wazuh_indexer_password
 WAZUH_VERIFY_SSL=false
 WAZUH_TEST_PROTOCOL=https
-RUST_LOG=info
 ```
 
 Configure your `claude_desktop_config.json` file:
@@ -198,7 +195,7 @@ Configure your `claude_desktop_config.json` file:
       "args": [
         "run", "--rm", "-i",
         "--env-file", "/path/to/your/.env",
-        "ghcr.io/gbrigandi/mcp-server-wazuh:latest"
+        "ghcr.io/ba0f3/mcp-server-wazuh:latest"
       ]
     }
   }
@@ -221,7 +218,9 @@ Configuration is managed through environment variables. A `.env` file can be pla
 | `WAZUH_INDEXER_PASSWORD` | Password for Wazuh Indexer API authentication.                                 | `admin`     | Yes      |
 | `WAZUH_VERIFY_SSL`       | Set to `true` to verify SSL certificates for Wazuh API and Indexer connections.  | `false`     | No       |
 | `WAZUH_TEST_PROTOCOL`    | Protocol for Wazuh connections (e.g., "http", "https"). Overrides client default. | `https`     | No       |
-| `RUST_LOG`               | Log level (e.g., `info`, `debug`, `trace`).                                    | `info`      | No       |
+| `MCP_SERVER_TRANSPORT`    | Transport mode: `stdio` (default) or `http` for HTTP transport.                 | `stdio`     | No       |
+| `MCP_SERVER_HOST`        | HTTP server bind address (only for http transport).                              | `localhost` | No       |
+| `MCP_SERVER_PORT`        | HTTP server port (only for http transport).                                      | `8000`      | No       |
 
 **Note on `WAZUH_VERIFY_SSL`:** For production environments, it is strongly recommended to set `WAZUH_VERIFY_SSL=true` and ensure proper certificate validation for both Wazuh Manager API and Wazuh Indexer connections. Setting it to `false` disables certificate checks, which is insecure.
 The "Required: Yes" indicates that these variables are essential for the server to connect to the respective Wazuh components. While defaults are provided, they are unlikely to match a production or non-local setup.
@@ -230,37 +229,34 @@ The "Required: Yes" indicates that these variables are essential for the server 
 
 ### Prerequisites
 
--   Install Rust: [https://www.rust-lang.org/tools/install](https://www.rust-lang.org/tools/install)
+-   Install Go 1.23 or later: [https://go.dev/doc/install](https://go.dev/doc/install)
 -   Install Docker and Docker Compose (optional, for containerized deployment): [https://docs.docker.com/get-docker/](https://docs.docker.com/get-docker/)
 
 ### Local Development
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/gbrigandi/mcp-server-wazuh.git 
+    git clone https://github.com/ba0f3/mcp-server-wazuh.git 
     cd mcp-server-wazuh
     ```
 2.  **Configure (if using Wazuh API):**
-    -   Copy the example environment file: `cp .env.example .env`
+    -   Create a `.env` file in the project root (optional, for local development)
     -   Edit the `.env` file with your specific Wazuh API details (e.g. `WAZUH_API_HOST`, `WAZUH_API_PORT`).
 3.  **Build:**
     ```bash
-    # Build with default features (stdio transport only)
-    cargo build
-
-    # Build with HTTP transport support
-    cargo build --features http
+    # Build the binary
+    go build -o mcp-server-wazuh .
     ```
 4.  **Run:**
     ```bash
     # Run with stdio transport (default)
-    cargo run
+    ./mcp-server-wazuh
 
-    # Run with HTTP transport (requires --features http during build)
-    cargo run --features http -- --transport http
+    # Or run directly with go
+    go run .
 
-    # Or use the run script (which might set up stdio mode):
-    # ./run.sh
+    # Run with HTTP transport
+    MCP_SERVER_TRANSPORT=http ./mcp-server-wazuh
     ```
 
 ## Transport Modes
@@ -274,9 +270,6 @@ The stdio transport is the default mode, ideal for local integrations where the 
 ```bash
 # Run with stdio transport (default)
 mcp-server-wazuh
-
-# Explicit stdio transport
-mcp-server-wazuh --transport stdio
 ```
 
 ### Streamable HTTP Transport
@@ -284,11 +277,11 @@ mcp-server-wazuh --transport stdio
 The HTTP transport enables remote server deployment, allowing MCP clients to connect over the network. This mode implements the MCP Streamable HTTP specification with Server-Sent Events (SSE) support.
 
 ```bash
-# Run with HTTP transport on default address (127.0.0.1:8080)
-mcp-server-wazuh --transport http
+# Run with HTTP transport (defaults to localhost:8000)
+MCP_SERVER_TRANSPORT=http ./mcp-server-wazuh
 
-# Run with custom host and port
-mcp-server-wazuh --transport http --host 0.0.0.0 --port 3000
+# Run with HTTP transport on custom host and port
+MCP_SERVER_TRANSPORT=http MCP_SERVER_HOST=0.0.0.0 MCP_SERVER_PORT=3000 ./mcp-server-wazuh
 ```
 
 **HTTP Transport Features:**
@@ -296,21 +289,19 @@ mcp-server-wazuh --transport http --host 0.0.0.0 --port 3000
 - POST requests with JSON-RPC messages
 - Server-Sent Events (SSE) for streaming responses
 - Session management with `MCP-Session-Id` header
-- Protocol version: `2025-06-18` (MCP spec supported by rmcp 0.10)
+- Protocol version: `2024-11-05` (MCP spec supported by go-sdk)
 
-**Security Note:** By default, HTTP transport binds to `127.0.0.1` (localhost only). When binding to `0.0.0.0` for remote access, ensure proper network security measures (firewall rules, reverse proxy with TLS, etc.) are in place.
+**Security Note:** By default, HTTP transport binds to `localhost:8000`. When deploying for remote access, ensure proper network security measures (firewall rules, reverse proxy with TLS, etc.) are in place.
 
-### CLI Arguments
+### Configuration
 
-| Argument | Description | Default |
-|----------|-------------|---------|
-| `--transport` | Transport mode: `stdio` or `http` | `stdio` |
-| `--host` | HTTP server bind address (only for http transport) | `127.0.0.1` |
-| `--port` | HTTP server port (only for http transport) | `8080` |
+Transport mode is configured via the `MCP_SERVER_TRANSPORT` environment variable:
+- `stdio` (default): Communication via stdin/stdout
+- `http`: HTTP transport mode
 
 ## Architecture
 
-The server is built using the [rmcp](https://crates.io/crates/rmcp) framework (v0.10+) and facilitates communication between MCP clients (e.g., Claude Desktop, IDE extensions) and the Wazuh MCP Server. The server supports both stdio and Streamable HTTP transports and interacts with the Wazuh Indexer and Wazuh Manager APIs to fetch security alerts and other data.
+The server is built using the [Model Context Protocol Go SDK](https://github.com/modelcontextprotocol/go-sdk) and facilitates communication between MCP clients (e.g., Claude Desktop, IDE extensions) and the Wazuh MCP Server. This project was ported from Rust to Go for improved maintainability and cross-platform compatibility. The server supports both stdio and Streamable HTTP transports and interacts with the Wazuh Indexer and Wazuh Manager APIs to fetch security alerts and other data.
 
 ```mermaid
 sequenceDiagram
@@ -521,20 +512,19 @@ Example interaction flow:
 
 ## Development & Testing
 
--   **Code Style:** Uses standard Rust formatting (`cargo fmt`).
--   **Linting:** Uses Clippy (`cargo clippy`).
--   **Testing:** Contains unit tests for transformation logic and integration tests. For stdio, tests might involve piping input/output to a test harness. For HTTP, tests use a mock Wazuh API server (`httpmock`) and a test MCP client.
+-   **Code Style:** Uses standard Go formatting (`go fmt`).
+-   **Linting:** Uses `golangci-lint` or `golint` for code quality checks.
+-   **Testing:** Contains unit tests for transformation logic and integration tests.
     ```bash
     # Run all tests
-    cargo test
+    go test ./...
 
-    # Run specific integration test (example for HTTP tests)
-    # cargo test --test integration_test
+    # Run tests with verbose output
+    go test -v ./...
 
-    # Run tests with detailed logging
-    RUST_LOG=debug cargo test
+    # Run tests with coverage
+    go test -cover ./...
     ```
--   See `tests/README.md` for more details on running tests and using the test client CLI.
 
 ## License
 
