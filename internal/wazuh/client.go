@@ -14,6 +14,13 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
+// noOpLogger is a logger that discards all log output
+type noOpLogger struct{}
+
+func (l *noOpLogger) Errorf(format string, v ...interface{}) {}
+func (l *noOpLogger) Warnf(format string, v ...interface{})  {}
+func (l *noOpLogger) Debugf(format string, v ...interface{}) {}
+
 type Client struct {
 	managerClient *resty.Client
 	indexerClient *resty.Client
@@ -28,14 +35,17 @@ func NewClient(apiHost string, apiPort int, apiUsername, apiPassword string, ind
 	managerURL := formatURL(apiHost, apiPort)
 	indexerURL := formatURL(indexerHost, indexerPort)
 
+	noOpLog := &noOpLogger{}
 	managerClient := resty.New().
 		SetBaseURL(managerURL).
-		SetTLSClientConfig(&tls.Config{InsecureSkipVerify: !verifySSL})
+		SetTLSClientConfig(&tls.Config{InsecureSkipVerify: !verifySSL}).
+		SetLogger(noOpLog) // Suppress warnings in tests
 
 	indexerClient := resty.New().
 		SetBaseURL(indexerURL).
 		SetTLSClientConfig(&tls.Config{InsecureSkipVerify: !verifySSL}).
-		SetBasicAuth(indexerUsername, indexerPassword)
+		SetBasicAuth(indexerUsername, indexerPassword).
+		SetLogger(noOpLog) // Suppress warnings in tests
 
 	return &Client{
 		managerClient: managerClient,

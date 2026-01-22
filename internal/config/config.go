@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/joho/godotenv"
@@ -31,8 +32,53 @@ type Config struct {
 }
 
 // Load loads configuration from environment variables
+// Reads .env file from the current working directory or project root
 func Load() (*Config, error) {
-	_ = godotenv.Load()
+	// Get current working directory
+	wd, err := os.Getwd()
+	if err != nil {
+		// If we can't get CWD, try loading from default location
+		if loadErr := godotenv.Load(); loadErr != nil {
+			// .env file is optional, so we continue even if it doesn't exist
+		}
+	} else {
+		// Try loading from current working directory first
+		envPath := filepath.Join(wd, ".env")
+		if _, err := os.Stat(envPath); err == nil {
+			// File exists in CWD, load it
+			if loadErr := godotenv.Overload(envPath); loadErr != nil {
+				// .env file exists but couldn't be loaded (might be permission issue)
+			}
+		} else {
+			// .env not found in CWD, try project root (go up to find go.mod or .git)
+			// Walk up the directory tree to find project root
+			dir := wd
+			for {
+				envPath := filepath.Join(dir, ".env")
+				if _, err := os.Stat(envPath); err == nil {
+					// Found .env file
+					if loadErr := godotenv.Overload(envPath); loadErr != nil {
+						// .env file exists but couldn't be loaded
+					}
+					break
+				}
+				// Check if we're at project root (has go.mod or .git)
+				if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+					// Found project root, but no .env here, try default search
+					_ = godotenv.Overload()
+					break
+				}
+				// Go up one directory
+				parent := filepath.Dir(dir)
+				if parent == dir {
+					// Reached filesystem root, try default search
+					_ = godotenv.Overload()
+					break
+				}
+				dir = parent
+			}
+		}
+	}
 
 	apiPort, _ := strconv.Atoi(getEnv("WAZUH_API_PORT", "55000"))
 	indexerPort, _ := strconv.Atoi(getEnv("WAZUH_INDEXER_PORT", "9200"))
