@@ -148,7 +148,7 @@ func closeSession(session interface{}) {
 	}
 }
 
-// Test all 29 tools using real MCP client
+// Test all 42 tools using real MCP client
 
 // Alert Management Tools (4 tools)
 func TestGetWazuhAlerts(t *testing.T) {
@@ -243,17 +243,59 @@ func TestGetWazuhRunningAgents(t *testing.T) {
 	}
 }
 
-func TestCheckAgentHealth(t *testing.T) {
+func TestGetAgentSummaryOS(t *testing.T) {
 	_, session, cancel := setupMCPTestSession(t, "success")
 	defer closeSession(session)
 	defer cancel()
 
-	res, err := callTool(t, session, "check_agent_health", map[string]interface{}{"agent_id": "001"})
+	res, err := callTool(t, session, "get_agent_summary_os", map[string]interface{}{})
 	if err != nil {
 		t.Fatalf("failed to call tool: %v", err)
 	}
 	if res.IsError {
-		t.Logf("check_agent_health returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+		t.Logf("get_agent_summary_os returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+	}
+}
+
+func TestGetAgentSummaryStatus(t *testing.T) {
+	_, session, cancel := setupMCPTestSession(t, "success")
+	defer closeSession(session)
+	defer cancel()
+
+	res, err := callTool(t, session, "get_agent_summary_status", map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("failed to call tool: %v", err)
+	}
+	if res.IsError {
+		t.Logf("get_agent_summary_status returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+	}
+}
+
+func TestGetAgentGroups(t *testing.T) {
+	_, session, cancel := setupMCPTestSession(t, "success")
+	defer closeSession(session)
+	defer cancel()
+
+	res, err := callTool(t, session, "get_agent_groups", map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("failed to call tool: %v", err)
+	}
+	if res.IsError {
+		t.Logf("get_agent_groups returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+	}
+}
+
+func TestGetAgentDistinctStats(t *testing.T) {
+	_, session, cancel := setupMCPTestSession(t, "success")
+	defer closeSession(session)
+	defer cancel()
+
+	res, err := callTool(t, session, "get_agent_distinct_stats", map[string]interface{}{"field": "os.name"})
+	if err != nil {
+		t.Fatalf("failed to call tool: %v", err)
+	}
+	if res.IsError {
+		t.Logf("get_agent_distinct_stats returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
 	}
 }
 
@@ -342,55 +384,7 @@ func TestGetWazuhVulnerabilitySummary(t *testing.T) {
 	}
 }
 
-// Security Analysis Tools (6 tools)
-func TestAnalyzeSecurityThreat(t *testing.T) {
-	_, session, cancel := setupMCPTestSession(t, "success")
-	defer closeSession(session)
-	defer cancel()
-
-	res, err := callTool(t, session, "analyze_security_threat", map[string]interface{}{
-		"indicator":      "192.168.1.1",
-		"indicator_type": "ip",
-	})
-	if err != nil {
-		t.Fatalf("failed to call tool: %v", err)
-	}
-	if res.IsError {
-		t.Logf("analyze_security_threat returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
-	}
-}
-
-func TestCheckIOCReputation(t *testing.T) {
-	_, session, cancel := setupMCPTestSession(t, "success")
-	defer closeSession(session)
-	defer cancel()
-
-	res, err := callTool(t, session, "check_ioc_reputation", map[string]interface{}{
-		"indicator":      "192.168.1.1",
-		"indicator_type": "ip",
-	})
-	if err != nil {
-		t.Fatalf("failed to call tool: %v", err)
-	}
-	if res.IsError {
-		t.Logf("check_ioc_reputation returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
-	}
-}
-
-func TestPerformRiskAssessment(t *testing.T) {
-	_, session, cancel := setupMCPTestSession(t, "success")
-	defer closeSession(session)
-	defer cancel()
-
-	res, err := callTool(t, session, "perform_risk_assessment", map[string]interface{}{"agent_id": "001"})
-	if err != nil {
-		t.Fatalf("failed to call tool: %v", err)
-	}
-	if res.IsError {
-		t.Logf("perform_risk_assessment returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
-	}
-}
-
+// Security Analysis Tools (1 tool)
 func TestGetTopSecurityThreats(t *testing.T) {
 	_, session, cancel := setupMCPTestSession(t, "success")
 	defer closeSession(session)
@@ -405,46 +399,18 @@ func TestGetTopSecurityThreats(t *testing.T) {
 	}
 }
 
-func TestGenerateSecurityReport(t *testing.T) {
-	_, session, cancel := setupMCPTestSession(t, "success")
-	defer closeSession(session)
-	defer cancel()
-
-	res, err := callTool(t, session, "generate_security_report", map[string]interface{}{"report_type": "executive"})
-	if err != nil {
-		t.Fatalf("failed to call tool: %v", err)
-	}
-	if res.IsError {
-		t.Logf("generate_security_report returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
-	}
-}
-
-func TestRunComplianceCheck(t *testing.T) {
-	_, session, cancel := setupMCPTestSession(t, "success")
-	defer closeSession(session)
-	defer cancel()
-
-	res, err := callTool(t, session, "run_compliance_check", map[string]interface{}{"framework": "PCI-DSS"})
-	if err != nil {
-		t.Fatalf("failed to call tool: %v", err)
-	}
-	if res.IsError {
-		t.Logf("run_compliance_check returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
-	}
-}
-
 // Statistics Tools (4 tools)
-func TestGetWazuhStatistics(t *testing.T) {
+func TestGetWazuhManagerDaemonStats(t *testing.T) {
 	_, session, cancel := setupMCPTestSession(t, "success")
 	defer closeSession(session)
 	defer cancel()
 
-	res, err := callTool(t, session, "get_wazuh_statistics", map[string]interface{}{})
+	res, err := callTool(t, session, "get_wazuh_manager_daemon_stats", map[string]interface{}{})
 	if err != nil {
 		t.Fatalf("failed to call tool: %v", err)
 	}
 	if res.IsError {
-		t.Logf("get_wazuh_statistics returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+		t.Logf("get_wazuh_manager_daemon_stats returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
 	}
 }
 
@@ -462,31 +428,31 @@ func TestGetWazuhWeeklyStats(t *testing.T) {
 	}
 }
 
-func TestGetWazuhRemotedStats(t *testing.T) {
+func TestGetAgentDaemonStats(t *testing.T) {
 	_, session, cancel := setupMCPTestSession(t, "success")
 	defer closeSession(session)
 	defer cancel()
 
-	res, err := callTool(t, session, "get_wazuh_remoted_stats", map[string]interface{}{})
+	res, err := callTool(t, session, "get_agent_daemon_stats", map[string]interface{}{"agent_id": "001"})
 	if err != nil {
 		t.Fatalf("failed to call tool: %v", err)
 	}
 	if res.IsError {
-		t.Logf("get_wazuh_remoted_stats returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+		t.Logf("get_agent_daemon_stats returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
 	}
 }
 
-func TestGetWazuhLogCollectorStats(t *testing.T) {
+func TestGetAgentLogCollectorStats(t *testing.T) {
 	_, session, cancel := setupMCPTestSession(t, "success")
 	defer closeSession(session)
 	defer cancel()
 
-	res, err := callTool(t, session, "get_wazuh_log_collector_stats", map[string]interface{}{})
+	res, err := callTool(t, session, "get_agent_log_collector_stats", map[string]interface{}{"agent_id": "001"})
 	if err != nil {
 		t.Fatalf("failed to call tool: %v", err)
 	}
 	if res.IsError {
-		t.Logf("get_wazuh_log_collector_stats returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+		t.Logf("get_agent_log_collector_stats returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
 	}
 }
 
@@ -577,7 +543,7 @@ func TestGetWazuhClusterNodes(t *testing.T) {
 	}
 }
 
-// Comprehensive test: Verify all 29 tools are callable
+// Comprehensive test: Verify all 42 tools are callable
 func TestAllToolsCallable(t *testing.T) {
 	_, session, cancel := setupMCPTestSession(t, "success")
 	defer closeSession(session)
@@ -590,42 +556,39 @@ func TestAllToolsCallable(t *testing.T) {
 		toolNames = append(toolNames, tool.Name)
 	}
 
-	// Expected 29 tools
-	expectedCount := 29
+	// Expected 42 tools
+	expectedCount := 42
 	if len(toolNames) != expectedCount {
 		t.Errorf("expected %d tools, got %d: %v", expectedCount, len(toolNames), toolNames)
 	}
 
-	// All 29 tool names
+	// All 42 tool names
 	allTools := []string{
-		// Alert Management (4)
+		// Alert Management (5)
 		"get_wazuh_alerts",
 		"get_wazuh_alert_summary",
 		"analyze_alert_patterns",
 		"search_security_events",
-		// Agent Management (6)
+		"get_top_security_threats",
+		// Agent Management (9)
 		"get_wazuh_agents",
 		"get_wazuh_running_agents",
-		"check_agent_health",
 		"get_agent_processes",
 		"get_agent_ports",
 		"get_agent_configuration",
+		"get_agent_summary_os",
+		"get_agent_summary_status",
+		"get_agent_groups",
+		"get_agent_distinct_stats",
 		// Vulnerability Management (3)
 		"get_wazuh_vulnerabilities",
 		"get_wazuh_critical_vulnerabilities",
 		"get_wazuh_vulnerability_summary",
-		// Security Analysis (6)
-		"analyze_security_threat",
-		"check_ioc_reputation",
-		"perform_risk_assessment",
-		"get_top_security_threats",
-		"generate_security_report",
-		"run_compliance_check",
 		// Statistics (4)
-		"get_wazuh_statistics",
+		"get_wazuh_manager_daemon_stats",
 		"get_wazuh_weekly_stats",
-		"get_wazuh_remoted_stats",
-		"get_wazuh_log_collector_stats",
+		"get_agent_daemon_stats",
+		"get_agent_log_collector_stats",
 		// Logs (3)
 		"search_wazuh_manager_logs",
 		"get_wazuh_manager_error_logs",
@@ -635,6 +598,27 @@ func TestAllToolsCallable(t *testing.T) {
 		// Cluster (2)
 		"get_wazuh_cluster_health",
 		"get_wazuh_cluster_nodes",
+		// SCA (3)
+		"get_sca_policies",
+		"get_sca_policy_checks",
+		"get_sca_summary",
+		// Decoders (3)
+		"get_decoders",
+		"get_decoder_files",
+		"get_decoders_by_file",
+		// Rootcheck (2)
+		"get_rootcheck_database",
+		"get_rootcheck_last_scan",
+		// MITRE (3)
+		"get_mitre_techniques",
+		"get_mitre_technique_by_id",
+		"get_mitre_agents",
+		// Active Response (2)
+		"execute_active_response",
+		"get_active_response_logs",
+		// CDB (2)
+		"get_cdb_lists",
+		"get_cdb_list_file",
 	}
 
 	// Verify all tools are present
@@ -670,15 +654,17 @@ func TestToolsWithEmptyArguments(t *testing.T) {
 
 	// Tools that should work with empty arguments
 	toolsWithNoArgs := []string{
-		"get_wazuh_statistics",
+		"get_wazuh_manager_daemon_stats",
 		"get_wazuh_weekly_stats",
-		"get_wazuh_remoted_stats",
-		"get_wazuh_log_collector_stats",
 		"get_wazuh_rules_summary",
 		"get_wazuh_cluster_health",
 		"get_wazuh_cluster_nodes",
 		"validate_wazuh_connection",
 		"get_wazuh_running_agents",
+		"get_agent_summary_os",
+		"get_agent_summary_status",
+		"get_agent_groups",
+		"get_decoder_files",
 	}
 
 	for _, toolName := range toolsWithNoArgs {
@@ -738,6 +724,228 @@ func TestToolFiltering(t *testing.T) {
 			// Log the error but don't fail the test for expected limitations
 			t.Logf("agent filter test case %d returned error (may be expected due to mock limitations): %s", i, res.Content[0].(*mcp.TextContent).Text)
 		}
+	}
+}
+
+// Experimental API Tests
+
+// SCA Tools (3 tools)
+func TestGetSCAPolicies(t *testing.T) {
+	_, session, cancel := setupMCPTestSession(t, "success")
+	defer closeSession(session)
+	defer cancel()
+
+	res, err := callTool(t, session, "get_sca_policies", map[string]interface{}{"agent_id": "001"})
+	if err != nil {
+		t.Fatalf("failed to call tool: %v", err)
+	}
+	if res.IsError {
+		t.Logf("get_sca_policies returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+	}
+}
+
+func TestGetSCAPolicyChecks(t *testing.T) {
+	_, session, cancel := setupMCPTestSession(t, "success")
+	defer closeSession(session)
+	defer cancel()
+
+	res, err := callTool(t, session, "get_sca_policy_checks", map[string]interface{}{"agent_id": "001", "policy_id": "cis_debian_linux"})
+	if err != nil {
+		t.Fatalf("failed to call tool: %v", err)
+	}
+	if res.IsError {
+		t.Logf("get_sca_policy_checks returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+	}
+}
+
+func TestGetSCASummary(t *testing.T) {
+	_, session, cancel := setupMCPTestSession(t, "success")
+	defer closeSession(session)
+	defer cancel()
+
+	res, err := callTool(t, session, "get_sca_summary", map[string]interface{}{"agent_id": "001"})
+	if err != nil {
+		t.Fatalf("failed to call tool: %v", err)
+	}
+	if res.IsError {
+		t.Logf("get_sca_summary returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+	}
+}
+
+// Decoder Tools (3 tools)
+func TestGetDecoders(t *testing.T) {
+	_, session, cancel := setupMCPTestSession(t, "success")
+	defer closeSession(session)
+	defer cancel()
+
+	res, err := callTool(t, session, "get_decoders", map[string]interface{}{"limit": 10})
+	if err != nil {
+		t.Fatalf("failed to call tool: %v", err)
+	}
+	if res.IsError {
+		t.Logf("get_decoders returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+	}
+}
+
+func TestGetDecoderFiles(t *testing.T) {
+	_, session, cancel := setupMCPTestSession(t, "success")
+	defer closeSession(session)
+	defer cancel()
+
+	res, err := callTool(t, session, "get_decoder_files", map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("failed to call tool: %v", err)
+	}
+	if res.IsError {
+		t.Logf("get_decoder_files returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+	}
+}
+
+func TestGetDecodersByFile(t *testing.T) {
+	_, session, cancel := setupMCPTestSession(t, "success")
+	defer closeSession(session)
+	defer cancel()
+
+	res, err := callTool(t, session, "get_decoders_by_file", map[string]interface{}{"filename": "decoder.xml"})
+	if err != nil {
+		t.Fatalf("failed to call tool: %v", err)
+	}
+	if res.IsError {
+		t.Logf("get_decoders_by_file returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+	}
+}
+
+// Rootcheck Tools (2 tools)
+func TestGetRootcheckDatabase(t *testing.T) {
+	_, session, cancel := setupMCPTestSession(t, "success")
+	defer closeSession(session)
+	defer cancel()
+
+	res, err := callTool(t, session, "get_rootcheck_database", map[string]interface{}{"agent_id": "001"})
+	if err != nil {
+		t.Fatalf("failed to call tool: %v", err)
+	}
+	if res.IsError {
+		t.Logf("get_rootcheck_database returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+	}
+}
+
+func TestGetRootcheckLastScan(t *testing.T) {
+	_, session, cancel := setupMCPTestSession(t, "success")
+	defer closeSession(session)
+	defer cancel()
+
+	res, err := callTool(t, session, "get_rootcheck_last_scan", map[string]interface{}{"agent_id": "001"})
+	if err != nil {
+		t.Fatalf("failed to call tool: %v", err)
+	}
+	if res.IsError {
+		t.Logf("get_rootcheck_last_scan returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+	}
+}
+
+// MITRE Tools (3 tools)
+func TestGetMITRETechniques(t *testing.T) {
+	_, session, cancel := setupMCPTestSession(t, "success")
+	defer closeSession(session)
+	defer cancel()
+
+	res, err := callTool(t, session, "get_mitre_techniques", map[string]interface{}{"limit": 10})
+	if err != nil {
+		t.Fatalf("failed to call tool: %v", err)
+	}
+	if res.IsError {
+		t.Logf("get_mitre_techniques returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+	}
+}
+
+func TestGetMITRETechniqueByID(t *testing.T) {
+	_, session, cancel := setupMCPTestSession(t, "success")
+	defer closeSession(session)
+	defer cancel()
+
+	res, err := callTool(t, session, "get_mitre_technique_by_id", map[string]interface{}{"technique_id": "T1005"})
+	if err != nil {
+		t.Fatalf("failed to call tool: %v", err)
+	}
+	if res.IsError {
+		t.Logf("get_mitre_technique_by_id returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+	}
+}
+
+func TestGetMITREAgents(t *testing.T) {
+	_, session, cancel := setupMCPTestSession(t, "success")
+	defer closeSession(session)
+	defer cancel()
+
+	res, err := callTool(t, session, "get_mitre_agents", map[string]interface{}{"limit": 10})
+	if err != nil {
+		t.Fatalf("failed to call tool: %v", err)
+	}
+	if res.IsError {
+		t.Logf("get_mitre_agents returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+	}
+}
+
+// Active Response Tools (2 tools)
+func TestExecuteActiveResponse(t *testing.T) {
+	_, session, cancel := setupMCPTestSession(t, "success")
+	defer closeSession(session)
+	defer cancel()
+
+	res, err := callTool(t, session, "execute_active_response", map[string]interface{}{
+		"agent_id": "001",
+		"command":  "restart-ossec0",
+		"custom":   false,
+	})
+	if err != nil {
+		t.Fatalf("failed to call tool: %v", err)
+	}
+	if res.IsError {
+		t.Logf("execute_active_response returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+	}
+}
+
+func TestGetActiveResponseLogs(t *testing.T) {
+	_, session, cancel := setupMCPTestSession(t, "success")
+	defer closeSession(session)
+	defer cancel()
+
+	res, err := callTool(t, session, "get_active_response_logs", map[string]interface{}{"limit": 10})
+	if err != nil {
+		t.Fatalf("failed to call tool: %v", err)
+	}
+	if res.IsError {
+		t.Logf("get_active_response_logs returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+	}
+}
+
+// CDB Tools (2 tools)
+func TestGetCDBLists(t *testing.T) {
+	_, session, cancel := setupMCPTestSession(t, "success")
+	defer closeSession(session)
+	defer cancel()
+
+	res, err := callTool(t, session, "get_cdb_lists", map[string]interface{}{"limit": 10})
+	if err != nil {
+		t.Fatalf("failed to call tool: %v", err)
+	}
+	if res.IsError {
+		t.Logf("get_cdb_lists returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
+	}
+}
+
+func TestGetCDBListFile(t *testing.T) {
+	_, session, cancel := setupMCPTestSession(t, "success")
+	defer closeSession(session)
+	defer cancel()
+
+	res, err := callTool(t, session, "get_cdb_list_file", map[string]interface{}{"path": "/var/ossec/etc/lists/audit-keys"})
+	if err != nil {
+		t.Fatalf("failed to call tool: %v", err)
+	}
+	if res.IsError {
+		t.Logf("get_cdb_list_file returned error (may be expected): %s", res.Content[0].(*mcp.TextContent).Text)
 	}
 }
 

@@ -21,54 +21,80 @@ This server transforms complex Wazuh API responses into MCP-compatible format, e
 
 Rather than requiring manual API calls or complex queries, security teams can now ask natural language questions like "Show me critical vulnerabilities on web servers," "What processes are running on agent 001?" or "Are we meeting PCI-DSS logging requirements?" and receive structured, actionable data from their Wazuh deployment.
 
-The server implements **29 specialized security tools** to provide comprehensive SIEM interaction capabilities.
+The server implements **42 specialized security tools** to provide comprehensive SIEM interaction capabilities, including experimental APIs for advanced security operations.
 
 ![](media/wazuh-alerts-1.png)
 
 ## Available Tools
 
-The Wazuh MCP Server provides 29 specialized security tools categorized as follows:
+The Wazuh MCP Server provides 42 specialized security tools categorized as follows:
 
-### Alert Management
+### Alert Management (5 tools)
 - `get_wazuh_alerts`: Retrieve security alerts with optional filtering by rule ID, level, agent, or timestamp.
 - `get_wazuh_alert_summary`: Retrieve a summary of security alerts grouped by specific fields.
 - `analyze_alert_patterns`: Identify recurring attack patterns or trends in security alerts.
 - `search_security_events`: Perform advanced search across security events and logs.
+- `get_top_security_threats`: Identify the top security threats currently active in the environment.
 
-### Agent Management
+### Agent Management (9 tools)
 - `get_wazuh_agents`: List all agents with status, IP, and OS details.
 - `get_wazuh_running_agents`: Quickly retrieve all currently active/running agents.
-- `check_agent_health`: Verify health status, connection, and synchronization of a specific agent.
 - `get_agent_processes`: List running processes on a specific agent (Syscollector).
 - `get_agent_ports`: List open network ports on a specific agent (Syscollector).
-- `get_agent_configuration`: Retrieve active configuration of a specific agent.
+- `get_agent_configuration`: Retrieve active configuration of a specific agent (requires component and configuration parameters).
+- `get_agent_summary_os`: Retrieve a summary of agents grouped by operating system.
+- `get_agent_summary_status`: Retrieve a summary of agents grouped by status.
+- `get_agent_groups`: Retrieve a list of all agent groups.
+- `get_agent_distinct_stats`: Retrieve distinct statistics for a specific agent field.
 
 ### Vulnerability Management
 - `get_wazuh_vulnerabilities`: List detected vulnerabilities with filtering by agent or severity.
 - `get_wazuh_critical_vulnerabilities`: Identify critical severity vulnerabilities requiring immediate action.
 - `get_wazuh_vulnerability_summary`: Get statistical summary of vulnerabilities across the environment.
 
-### Security Analysis & Compliance
-- `analyze_security_threat`: Analyze threat indicators (IP, hash, domain) for risk and origin.
-- `check_ioc_reputation`: Check global reputation of an Indicator of Compromise (IoC).
-- `perform_risk_assessment`: Execute environment-wide or agent-specific risk assessments.
-- `get_top_security_threats`: Identify the most active security threats.
-- `generate_security_report`: Generate detailed executive, technical, or compliance reports.
-- `run_compliance_check`: Execute audits against frameworks (PCI-DSS, GDPR, HIPAA, NIST).
 
-### System Statistics & Logs
-- `get_wazuh_statistics`: Retrieve comprehensive operational statistics of the Wazuh manager.
+### System Statistics & Logs (7 tools)
+- `get_wazuh_manager_daemon_stats`: Retrieve comprehensive daemon statistics of the Wazuh manager (replaces deprecated endpoint).
 - `get_wazuh_weekly_stats`: Retrieve historical security statistics for the past week.
-- `get_wazuh_remoted_stats`: Monitor agent connection and data throughput statistics.
-- `get_wazuh_log_collector_stats`: Monitor log collection service performance.
+- `get_agent_daemon_stats`: Retrieve daemon statistics for a specific agent.
+- `get_agent_log_collector_stats`: Retrieve log collector statistics for a specific agent.
 - `search_wazuh_manager_logs`: Search internal manager logs for troubleshooting.
 - `get_wazuh_manager_error_logs`: Specifically retrieve error-level logs from the manager.
 - `validate_wazuh_connection`: Verify authentication and connectivity to Wazuh API.
 
-### Rules & Cluster
+### Rules & Cluster (3 tools)
 - `get_wazuh_rules_summary`: Statistical summary of all active security rules.
 - `get_wazuh_cluster_health`: Health status and synchronization state of the Wazuh cluster.
 - `get_wazuh_cluster_nodes`: List all nodes in the Wazuh cluster with their status.
+
+### Experimental APIs
+
+#### SCA (Security Configuration Assessment) (3 tools)
+- `get_sca_policies`: Retrieve SCA policies for an agent.
+- `get_sca_policy_checks`: Retrieve checks for a specific SCA policy on an agent.
+- `get_sca_summary`: Retrieve a summary of SCA results for an agent.
+
+#### Decoders (3 tools)
+- `get_decoders`: Retrieve all Wazuh decoders (log parsing rules).
+- `get_decoder_files`: Retrieve list of decoder files.
+- `get_decoders_by_file`: Retrieve decoders from a specific file.
+
+#### Rootcheck (2 tools)
+- `get_rootcheck_database`: Retrieve rootcheck database results for an agent (rootkit detection).
+- `get_rootcheck_last_scan`: Retrieve the last rootcheck scan time for an agent.
+
+#### MITRE ATT&CK (3 tools)
+- `get_mitre_techniques`: Retrieve MITRE ATT&CK techniques.
+- `get_mitre_technique_by_id`: Retrieve a specific MITRE ATT&CK technique by ID.
+- `get_mitre_agents`: Retrieve agents with MITRE ATT&CK techniques.
+
+#### Active Response (2 tools)
+- `execute_active_response`: Execute active response commands on an agent or all agents.
+- `get_active_response_logs`: Retrieve active response execution logs.
+
+#### CDB Lists (2 tools)
+- `get_cdb_lists`: Retrieve all CDB (Custom Database) lists.
+- `get_cdb_list_file`: Retrieve entries from a specific CDB list file.
 
 ## Requirements
 
