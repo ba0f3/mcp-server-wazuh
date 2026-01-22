@@ -82,17 +82,106 @@ func NewMockWazuhServer(scenario string) *MockWazuhServer {
 		}
 
 		// Agents endpoint
-		if r.URL.Path == "/agents" {
+		if r.URL.Path == "/agents" || r.URL.Path == "/agents/" {
+			if scenario == "auth_error" {
+				w.WriteHeader(http.StatusUnauthorized)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error":   401,
+					"message": "Invalid credentials",
+				})
+				return
+			}
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"data": map[string]interface{}{
 					"affected_items": []interface{}{
 						map[string]interface{}{
-							"id":     "000",
-							"name":   "Wazuh Manager",
+							"id":      "000",
+							"name":    "Wazuh Manager",
+							"status":  "active",
+							"ip":      "127.0.0.1",
+							"version": "4.12.0",
+							"os": map[string]interface{}{
+								"name":    "Linux",
+								"version": "Ubuntu 22.04",
+							},
+						},
+						map[string]interface{}{
+							"id":      "001",
+							"name":    "web-server-01",
+							"status":  "active",
+							"ip":      "192.168.1.100",
+							"version": "4.12.0",
+							"os": map[string]interface{}{
+								"name":    "Linux",
+								"version": "Ubuntu 22.04",
+							},
+						},
+					},
+				},
+			})
+			return
+		}
+
+		// Statistics endpoint
+		if r.URL.Path == "/manager/stats" || r.URL.Path == "/manager/stats/" {
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"data": map[string]interface{}{
+					"uptime": 3600,
+					"cpu":    25.5,
+					"memory": 45.2,
+				},
+			})
+			return
+		}
+
+		// Rules summary endpoint
+		if r.URL.Path == "/rules" || r.URL.Path == "/rules/" {
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"data": map[string]interface{}{
+					"total_rules":  1500,
+					"active_rules": 1200,
+				},
+			})
+			return
+		}
+
+		// Cluster health endpoint
+		if r.URL.Path == "/cluster/health" || r.URL.Path == "/cluster/health/" {
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"data": map[string]interface{}{
+					"status": "healthy",
+					"nodes":  3,
+				},
+			})
+			return
+		}
+
+		// Cluster nodes endpoint
+		if r.URL.Path == "/cluster/nodes" || r.URL.Path == "/cluster/nodes/" {
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"data": map[string]interface{}{
+					"affected_items": []interface{}{
+						map[string]interface{}{
+							"name":   "node-1",
 							"status": "active",
 						},
 					},
+				},
+			})
+			return
+		}
+
+		// Connection validation endpoint
+		if r.URL.Path == "/" && r.Method == "GET" {
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"data": map[string]interface{}{
+					"status": "connected",
 				},
 			})
 			return

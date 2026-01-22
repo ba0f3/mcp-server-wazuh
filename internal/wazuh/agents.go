@@ -116,6 +116,9 @@ func (c *Client) CheckAgentHealth(agentID string) (interface{}, error) {
 	}
 
 	if resp.IsError() {
+		if resp.StatusCode() == 404 {
+			return nil, fmt.Errorf("agent health endpoint not found (404): the /agents/{agent_id}/health endpoint is not available in this Wazuh installation. This endpoint may require a specific Wazuh version or configuration")
+		}
 		return nil, fmt.Errorf("error checking agent health: %s", resp.String())
 	}
 
@@ -127,16 +130,40 @@ func (c *Client) CheckAgentHealth(agentID string) (interface{}, error) {
 	return result, nil
 }
 
+// FlexibleTime can unmarshal both number (Unix timestamp) and string values
+type FlexibleTime struct {
+	Value string
+}
+
+func (ft *FlexibleTime) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as number first
+	var num float64
+	if err := json.Unmarshal(data, &num); err == nil {
+		ft.Value = fmt.Sprintf("%.0f", num)
+		return nil
+	}
+	// If not a number, unmarshal as string
+	return json.Unmarshal(data, &ft.Value)
+}
+
+func (ft FlexibleTime) MarshalJSON() ([]byte, error) {
+	return json.Marshal(ft.Value)
+}
+
+func (ft FlexibleTime) String() string {
+	return ft.Value
+}
+
 type Process struct {
-	PID       int    `json:"pid"`
-	Name      string `json:"name"`
-	State     string `json:"state"`
-	PPID      int    `json:"ppid"`
-	EUser     string `json:"euser"`
-	Cmd       string `json:"cmd"`
-	StartTime string `json:"start_time"`
-	Resident  int64  `json:"resident"`
-	VMSize    int64  `json:"vm_size"`
+	PID       int          `json:"pid"`
+	Name      string       `json:"name"`
+	State     string       `json:"state"`
+	PPID      int          `json:"ppid"`
+	EUser     string       `json:"euser"`
+	Cmd       string       `json:"cmd"`
+	StartTime FlexibleTime `json:"start_time"`
+	Resident  int64        `json:"resident"`
+	VMSize    int64        `json:"vm_size"`
 }
 
 func (c *Client) GetAgentProcesses(agentID string, limit int) ([]Process, error) {
@@ -227,6 +254,9 @@ func (c *Client) GetAgentConfiguration(agentID string) (interface{}, error) {
 	}
 
 	if resp.IsError() {
+		if resp.StatusCode() == 404 {
+			return nil, fmt.Errorf("agent configuration endpoint not found (404): the /agents/{agent_id}/config endpoint is not available in this Wazuh installation. This endpoint may require a specific Wazuh version or configuration")
+		}
 		return nil, fmt.Errorf("error getting agent configuration: %s", resp.String())
 	}
 
