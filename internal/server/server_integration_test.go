@@ -46,7 +46,7 @@ func TestAllToolsRegistered(t *testing.T) {
 		toolList = append(toolList, tool)
 	}
 
-	expectedToolCount := 29
+	expectedToolCount := 42
 	if len(toolList) != expectedToolCount {
 		t.Errorf("expected %d tools, got %d", expectedToolCount, len(toolList))
 	}
@@ -57,7 +57,7 @@ func TestAllToolsRegistered(t *testing.T) {
 		"get_wazuh_agents",
 		"get_wazuh_vulnerabilities",
 		"validate_wazuh_connection",
-		"get_wazuh_statistics",
+		"get_wazuh_manager_daemon_stats",
 		"get_wazuh_rules_summary",
 		"get_wazuh_cluster_health",
 	}

@@ -5,27 +5,56 @@ import (
 	"fmt"
 )
 
+// FlexibleStringArray can unmarshal both string and []string values
+type FlexibleStringArray struct {
+	Value []string
+}
+
+func (fsa *FlexibleStringArray) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as array first
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err == nil {
+		fsa.Value = arr
+		return nil
+	}
+	// If not an array, try to unmarshal as string
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		if str != "" {
+			fsa.Value = []string{str}
+		} else {
+			fsa.Value = []string{}
+		}
+		return nil
+	}
+	return fmt.Errorf("cannot unmarshal %s into FlexibleStringArray", string(data))
+}
+
+func (fsa FlexibleStringArray) MarshalJSON() ([]byte, error) {
+	return json.Marshal(fsa.Value)
+}
+
 // SCAPolicy represents a SCA policy
 type SCAPolicy struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	References  []string `json:"references"`
-	File        string `json:"file"`
+	ID          string              `json:"id"`
+	Title       string              `json:"title"`
+	Description string              `json:"description"`
+	References  FlexibleStringArray `json:"references"`
+	File        string              `json:"file"`
 }
 
 // SCACheck represents a SCA check result
 type SCACheck struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Rationale   string `json:"rationale"`
-	Remediation string `json:"remediation"`
+	ID          string                 `json:"id"`
+	Title       string                 `json:"title"`
+	Description string                 `json:"description"`
+	Rationale   string                 `json:"rationale"`
+	Remediation string                 `json:"remediation"`
 	Compliance  map[string]interface{} `json:"compliance"`
-	Status      string `json:"status"`
-	Result      string `json:"result"`
-	Reason      string `json:"reason"`
-	Condition   string `json:"condition"`
+	Status      string                 `json:"status"`
+	Result      string                 `json:"result"`
+	Reason      string                 `json:"reason"`
+	Condition   string                 `json:"condition"`
 }
 
 // GetSCAPolicies retrieves SCA policies for an agent
@@ -61,7 +90,7 @@ func (c *Client) GetSCAPolicies(agentID string, limit int, offset int) ([]SCAPol
 func (c *Client) GetSCAPolicyChecks(agentID, policyID string, limit int, offset int) ([]SCACheck, error) {
 	req := c.ManagerRequest().
 		SetPathParams(map[string]string{
-			"agent_id": agentID,
+			"agent_id":  agentID,
 			"policy_id": policyID,
 		}).
 		SetQueryParam("limit", fmt.Sprintf("%d", limit)).

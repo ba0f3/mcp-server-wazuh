@@ -332,7 +332,11 @@ func TestGetAgentConfiguration(t *testing.T) {
 	defer closeSession(session)
 	defer cancel()
 
-	res, err := callTool(t, session, "get_agent_configuration", map[string]interface{}{"agent_id": "001"})
+	res, err := callTool(t, session, "get_agent_configuration", map[string]interface{}{
+		"agent_id":      "001",
+		"component":     "client",
+		"configuration": "client",
+	})
 	if err != nil {
 		t.Fatalf("failed to call tool: %v", err)
 	}
@@ -895,7 +899,7 @@ func TestExecuteActiveResponse(t *testing.T) {
 
 	res, err := callTool(t, session, "execute_active_response", map[string]interface{}{
 		"agent_id": "001",
-		"command":  "restart-ossec0",
+		"command":  "ps aux",
 		"custom":   false,
 	})
 	if err != nil {

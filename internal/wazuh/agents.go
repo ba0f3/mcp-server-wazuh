@@ -106,7 +106,6 @@ func (c *Client) GetAgentInfo(id string) (*Agent, error) {
 	return &result.Data.AffectedItems[0], nil
 }
 
-
 // FlexibleTime can unmarshal both number (Unix timestamp) and string values
 type FlexibleTime struct {
 	Value string
@@ -131,11 +130,40 @@ func (ft FlexibleTime) String() string {
 	return ft.Value
 }
 
+// FlexibleInt can unmarshal both number and string values
+type FlexibleInt struct {
+	Value int
+}
+
+func (fi *FlexibleInt) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as number first
+	var num int
+	if err := json.Unmarshal(data, &num); err == nil {
+		fi.Value = num
+		return nil
+	}
+	// If not a number, try to unmarshal as string and parse
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		// Try to parse string as int
+		var parsed int
+		if _, err := fmt.Sscanf(str, "%d", &parsed); err == nil {
+			fi.Value = parsed
+			return nil
+		}
+	}
+	return fmt.Errorf("cannot unmarshal %s into FlexibleInt", string(data))
+}
+
+func (fi FlexibleInt) MarshalJSON() ([]byte, error) {
+	return json.Marshal(fi.Value)
+}
+
 type Process struct {
-	PID       int          `json:"pid"`
+	PID       FlexibleInt  `json:"pid"`
 	Name      string       `json:"name"`
 	State     string       `json:"state"`
-	PPID      int          `json:"ppid"`
+	PPID      FlexibleInt  `json:"ppid"`
 	EUser     string       `json:"euser"`
 	Cmd       string       `json:"cmd"`
 	StartTime FlexibleTime `json:"start_time"`
@@ -308,17 +336,36 @@ func (c *Client) GetAgentGroups() (interface{}, error) {
 }
 
 // GetAgentDistinctStats retrieves distinct statistics for a specific field
+// Note: The API endpoint /agents/stats/distinct doesn't accept a 'field' query parameter
+// Instead, use /agents/stats/distinct?field=<field_name> but check API documentation
 func (c *Client) GetAgentDistinctStats(field string) (interface{}, error) {
-	resp, err := c.ManagerRequest().
-		SetQueryParam("field", field).
-		Get("/agents/stats/distinct")
+	req := c.ManagerRequest()
+	// Only add field parameter if it's not empty and the API supports it
+	// Some API versions may not support this parameter
+	if field != "" {
+		// Try with field parameter - may fail on some API versions
+		req = req.SetQueryParam("field", field)
+	}
+
+	resp, err := req.Get("/agents/stats/distinct")
 
 	if err != nil {
 		return nil, err
 	}
 
 	if resp.IsError() {
-		return nil, fmt.Errorf("error getting agent distinct stats: %s", resp.String())
+		// If error is due to field parameter, try without it
+		if field != "" && (resp.StatusCode() == 400 || resp.StatusCode() == 422) {
+			resp, err = c.ManagerRequest().Get("/agents/stats/distinct")
+			if err != nil {
+				return nil, err
+			}
+			if resp.IsError() {
+				return nil, fmt.Errorf("error getting agent distinct stats: %s", resp.String())
+			}
+		} else {
+			return nil, fmt.Errorf("error getting agent distinct stats: %s", resp.String())
+		}
 	}
 
 	var result map[string]interface{}

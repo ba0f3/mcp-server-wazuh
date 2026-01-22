@@ -5,12 +5,37 @@ import (
 	"fmt"
 )
 
+// FlexibleIntOrArray can unmarshal both int and array values
+type FlexibleIntOrArray struct {
+	Value int
+}
+
+func (fia *FlexibleIntOrArray) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as number first
+	var num int
+	if err := json.Unmarshal(data, &num); err == nil {
+		fia.Value = num
+		return nil
+	}
+	// If not a number, try to unmarshal as array and use length
+	var arr []interface{}
+	if err := json.Unmarshal(data, &arr); err == nil {
+		fia.Value = len(arr)
+		return nil
+	}
+	return fmt.Errorf("cannot unmarshal %s into FlexibleIntOrArray", string(data))
+}
+
+func (fia FlexibleIntOrArray) MarshalJSON() ([]byte, error) {
+	return json.Marshal(fia.Value)
+}
+
 // CDBList represents a CDB list
 type CDBList struct {
-	Path    string `json:"path"`
-	Items   int    `json:"items"`
-	Key     string `json:"key"`
-	Value   string `json:"value"`
+	Path  string             `json:"path"`
+	Items FlexibleIntOrArray `json:"items"`
+	Key   string             `json:"key"`
+	Value string             `json:"value"`
 }
 
 // GetCDBLists retrieves all CDB lists
