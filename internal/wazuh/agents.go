@@ -6,18 +6,18 @@ import (
 )
 
 type Agent struct {
-	ID                 string   `json:"id"`
-	Name               string   `json:"name"`
-	IP                 string   `json:"ip"`
-	Status             string   `json:"status"`
-	Version            string   `json:"version"`
-	LastKeepAlive      string   `json:"lastKeepAlive"`
-	DateAdd            string   `json:"dateAdd"`
-	NodeName           string   `json:"node_name"`
-	RegisterIP         string   `json:"registerIP"`
-	Group              []string `json:"group"`
-	GroupConfigStatus  string   `json:"group_config_status"`
-	OS                 AgentOS  `json:"os"`
+	ID                string   `json:"id"`
+	Name              string   `json:"name"`
+	IP                string   `json:"ip"`
+	Status            string   `json:"status"`
+	Version           string   `json:"version"`
+	LastKeepAlive     string   `json:"lastKeepAlive"`
+	DateAdd           string   `json:"dateAdd"`
+	NodeName          string   `json:"node_name"`
+	RegisterIP        string   `json:"registerIP"`
+	Group             []string `json:"group"`
+	GroupConfigStatus string   `json:"group_config_status"`
+	OS                AgentOS  `json:"os"`
 }
 
 type AgentOS struct {
@@ -72,6 +72,61 @@ func (c *Client) GetAgents(limit int, status, name, ip, group, osPlatform, versi
 	return result.Data.AffectedItems, nil
 }
 
+func (c *Client) GetRunningAgents() ([]Agent, error) {
+	return c.GetAgents(100, "active", "", "", "", "", "")
+}
+
+func (c *Client) GetAgentInfo(id string) (*Agent, error) {
+	req := c.ManagerRequest().
+		SetPathParams(map[string]string{"agent_id": id})
+
+	resp, err := req.Get("/agents/{agent_id}")
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.IsError() {
+		return nil, fmt.Errorf("error getting agent info: %s", resp.String())
+	}
+
+	var result struct {
+		Data struct {
+			AffectedItems []Agent `json:"affected_items"`
+		} `json:"data"`
+	}
+
+	if err := json.Unmarshal(resp.Body(), &result); err != nil {
+		return nil, err
+	}
+
+	if len(result.Data.AffectedItems) == 0 {
+		return nil, fmt.Errorf("agent not found")
+	}
+
+	return &result.Data.AffectedItems[0], nil
+}
+
+func (c *Client) CheckAgentHealth(agentID string) (interface{}, error) {
+	resp, err := c.ManagerRequest().
+		SetPathParams(map[string]string{"agent_id": agentID}).
+		Get("/agents/{agent_id}/health")
+
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.IsError() {
+		return nil, fmt.Errorf("error checking agent health: %s", resp.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(resp.Body(), &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
 type Process struct {
 	PID       int    `json:"pid"`
 	Name      string `json:"name"`
@@ -84,14 +139,10 @@ type Process struct {
 	VMSize    int64  `json:"vm_size"`
 }
 
-func (c *Client) GetAgentProcesses(agentID string, limit int, search string) ([]Process, error) {
+func (c *Client) GetAgentProcesses(agentID string, limit int) ([]Process, error) {
 	req := c.ManagerRequest().
 		SetPathParams(map[string]string{"agent_id": agentID}).
 		SetQueryParam("limit", fmt.Sprintf("%d", limit))
-
-	if search != "" {
-		req.SetQueryParam("search", search)
-	}
 
 	resp, err := req.Get("/syscollector/{agent_id}/processes")
 	if err != nil {
@@ -136,14 +187,10 @@ type Port struct {
 	RXQueue int    `json:"rx_queue"`
 }
 
-func (c *Client) GetAgentPorts(agentID string, limit int, protocol string) ([]Port, error) {
+func (c *Client) GetAgentPorts(agentID string, limit int) ([]Port, error) {
 	req := c.ManagerRequest().
 		SetPathParams(map[string]string{"agent_id": agentID}).
 		SetQueryParam("limit", fmt.Sprintf("%d", limit))
-
-	if protocol != "" {
-		req.SetQueryParam("protocol", protocol)
-	}
 
 	resp, err := req.Get("/syscollector/{agent_id}/netports")
 	if err != nil {
@@ -168,4 +215,25 @@ func (c *Client) GetAgentPorts(agentID string, limit int, protocol string) ([]Po
 	}
 
 	return result.Data.AffectedItems, nil
+}
+
+func (c *Client) GetAgentConfiguration(agentID string) (interface{}, error) {
+	resp, err := c.ManagerRequest().
+		SetPathParams(map[string]string{"agent_id": agentID}).
+		Get("/agents/{agent_id}/config")
+
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.IsError() {
+		return nil, fmt.Errorf("error getting agent configuration: %s", resp.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(resp.Body(), &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }

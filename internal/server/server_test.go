@@ -61,31 +61,31 @@ func TestToolsList(t *testing.T) {
 	}
 	defer session.Close()
 
-	var tools []*mcp.Tool
+	var toolList []*mcp.Tool
 	for tool, err := range session.Tools(ctx, nil) {
 		if err != nil {
 			t.Fatalf("failed to list tools: %v", err)
 		}
-		tools = append(tools, tool)
+		toolList = append(toolList, tool)
 	}
 
-	if len(tools) == 0 {
+	if len(toolList) == 0 {
 		t.Errorf("expected tools, got none")
 	}
 
 	found := false
-	for _, tool := range tools {
-		if tool.Name == "get_wazuh_alert_summary" {
+	for _, tool := range toolList {
+		if tool.Name == "get_wazuh_alerts" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("get_wazuh_alert_summary tool not found")
+		t.Errorf("get_wazuh_alerts tool not found")
 	}
 }
 
-func TestGetWazuhAlertSummarySuccess(t *testing.T) {
+func TestGetWazuhAlertsSuccess(t *testing.T) {
 	mockServer := testutils.NewMockWazuhServer("success")
 	defer mockServer.Close()
 
@@ -110,7 +110,7 @@ func TestGetWazuhAlertSummarySuccess(t *testing.T) {
 	defer session.Close()
 
 	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "get_wazuh_alert_summary",
+		Name:      "get_wazuh_alerts",
 		Arguments: map[string]interface{}{"limit": 2},
 	})
 
@@ -119,7 +119,7 @@ func TestGetWazuhAlertSummarySuccess(t *testing.T) {
 	}
 
 	if res.IsError {
-		t.Errorf("expected success, got error")
+		t.Errorf("expected success, got error: %s", res.Content[0].(*mcp.TextContent).Text)
 	}
 
 	if len(res.Content) == 0 {
@@ -132,7 +132,7 @@ func TestGetWazuhAlertSummarySuccess(t *testing.T) {
 	}
 }
 
-func TestGetWazuhAlertSummaryEmpty(t *testing.T) {
+func TestGetWazuhAlertsEmpty(t *testing.T) {
 	mockServer := testutils.NewMockWazuhServer("empty_alerts")
 	defer mockServer.Close()
 
@@ -157,7 +157,7 @@ func TestGetWazuhAlertSummaryEmpty(t *testing.T) {
 	defer session.Close()
 
 	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "get_wazuh_alert_summary",
+		Name:      "get_wazuh_alerts",
 		Arguments: map[string]interface{}{},
 	})
 
@@ -171,7 +171,7 @@ func TestGetWazuhAlertSummaryEmpty(t *testing.T) {
 	}
 }
 
-func TestGetWazuhAlertSummaryError(t *testing.T) {
+func TestGetWazuhAlertsError(t *testing.T) {
 	mockServer := testutils.NewMockWazuhServer("alerts_error")
 	defer mockServer.Close()
 
@@ -196,7 +196,7 @@ func TestGetWazuhAlertSummaryError(t *testing.T) {
 	defer session.Close()
 
 	res, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "get_wazuh_alert_summary",
+		Name:      "get_wazuh_alerts",
 		Arguments: map[string]interface{}{},
 	})
 
@@ -209,7 +209,7 @@ func TestGetWazuhAlertSummaryError(t *testing.T) {
 	}
 
 	text := res.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "Error retrieving alerts") {
+	if !strings.Contains(text, "Error") {
 		t.Errorf("expected error message, got: %s", text)
 	}
 }

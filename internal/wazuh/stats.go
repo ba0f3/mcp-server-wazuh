@@ -121,9 +121,16 @@ func (c *Client) GetManagerLogs(limit int, offset int, level string, tag string,
 }
 
 func (c *Client) GetLogCollectorStats(agentID string) (interface{}, error) {
-	resp, err := c.ManagerRequest().
-		SetPathParams(map[string]string{"agent_id": agentID}).
-		Get("/agents/{agent_id}/stats/logcollector")
+	req := c.ManagerRequest()
+	var endpoint string
+	if agentID != "" {
+		req.SetPathParams(map[string]string{"agent_id": agentID})
+		endpoint = "/agents/{agent_id}/stats/logcollector"
+	} else {
+		endpoint = "/manager/stats/logcollector"
+	}
+
+	resp, err := req.Get(endpoint)
 
 	if err != nil {
 		return nil, err
@@ -133,17 +140,12 @@ func (c *Client) GetLogCollectorStats(agentID string) (interface{}, error) {
 		return nil, fmt.Errorf("error getting logcollector stats: %s", resp.String())
 	}
 
-	var result struct {
-		Data struct {
-			AffectedItems []interface{} `json:"affected_items"`
-		} `json:"data"`
-	}
-
+	var result map[string]interface{}
 	if err := json.Unmarshal(resp.Body(), &result); err != nil {
 		return nil, err
 	}
 
-	return result.Data.AffectedItems, nil
+	return result, nil
 }
 
 func (c *Client) GetRemotedStats() (interface{}, error) {
@@ -157,17 +159,12 @@ func (c *Client) GetRemotedStats() (interface{}, error) {
 		return nil, fmt.Errorf("error getting remoted stats: %s", resp.String())
 	}
 
-	var result struct {
-		Data struct {
-			AffectedItems []interface{} `json:"affected_items"`
-		} `json:"data"`
-	}
-
+	var result map[string]interface{}
 	if err := json.Unmarshal(resp.Body(), &result); err != nil {
 		return nil, err
 	}
 
-	return result.Data.AffectedItems, nil
+	return result, nil
 }
 
 func (c *Client) GetWeeklyStats() (interface{}, error) {
@@ -181,15 +178,48 @@ func (c *Client) GetWeeklyStats() (interface{}, error) {
 		return nil, fmt.Errorf("error getting weekly stats: %s", resp.String())
 	}
 
-	var result struct {
-		Data struct {
-			AffectedItems []interface{} `json:"affected_items"`
-		} `json:"data"`
-	}
-
+	var result map[string]interface{}
 	if err := json.Unmarshal(resp.Body(), &result); err != nil {
 		return nil, err
 	}
 
-	return result.Data.AffectedItems, nil
+	return result, nil
+}
+
+func (c *Client) GetWazuhStatistics() (interface{}, error) {
+	resp, err := c.ManagerRequest().Get("/manager/stats/all")
+
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.IsError() {
+		return nil, fmt.Errorf("error getting wazuh statistics: %s", resp.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(resp.Body(), &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (c *Client) ValidateConnection() (interface{}, error) {
+	resp, err := c.ManagerRequest().Get("/")
+
+	if err != nil {
+		return map[string]interface{}{"status": "failed", "error": err.Error()}, nil
+	}
+
+	if resp.IsError() {
+		return map[string]interface{}{"status": "failed", "error": resp.String()}, nil
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(resp.Body(), &result); err != nil {
+		return map[string]interface{}{"status": "failed", "error": err.Error()}, nil
+	}
+
+	return map[string]interface{}{"status": "connected", "details": result}, nil
 }

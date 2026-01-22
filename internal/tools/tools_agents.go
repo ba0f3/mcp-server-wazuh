@@ -3,284 +3,181 @@ package tools
 import (
 	"context"
 	"fmt"
-	"os"
-	"strings"
 
 	"github.com/ba0f3/mcp-server-wazuh/internal/wazuh"
-
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// registerAgentTools registers agent-related tools
 func registerAgentTools(s *mcp.Server, client *wazuh.Client) {
 	// get_wazuh_agents
-	type AgentsInput struct {
-		Limit      int    `json:"limit,omitempty" jsonschema:"description:Maximum number of agents to retrieve (default: 300)"`
-		Status     string `json:"status,omitempty" jsonschema:"description:Agent status filter (active, disconnected, pending, never_connected)"`
-		Name       string `json:"name,omitempty" jsonschema:"description:Agent name to search for (optional)"`
-		IP         string `json:"ip,omitempty" jsonschema:"description:Agent IP address to filter by (optional)"`
-		Group      string `json:"group,omitempty" jsonschema:"description:Agent group to filter by (optional)"`
-		OSPlatform string `json:"os_platform,omitempty" jsonschema:"description:Operating system platform to filter by (optional)"`
-		Version    string `json:"version,omitempty" jsonschema:"description:Agent version to filter by (optional)"`
+	type GetAgentsInput struct {
+		Limit      int    `json:"limit,omitempty" jsonschema:"description:Maximum number of agents to retrieve (default: 100)"`
+		Status     string `json:"status,omitempty" jsonschema:"description:Filter by status (active, disconnected, never_connected, pending)"`
+		Name       string `json:"name,omitempty" jsonschema:"description:Filter by agent name"`
+		IP         string `json:"ip,omitempty" jsonschema:"description:Filter by IP address"`
+		Group      string `json:"group,omitempty" jsonschema:"description:Filter by group name"`
+		OSPlatform string `json:"os_platform,omitempty" jsonschema:"description:Filter by OS platform"`
+		Version    string `json:"version,omitempty" jsonschema:"description:Filter by agent version"`
+		AgentID    string `json:"agent_id,omitempty" jsonschema:"description:Filter by specific agent ID (overrides other filters if used alone in API, but here we provide it for completeness)"`
 	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_wazuh_agents",
-		Description: "Retrieves a list of Wazuh agents with their current status and details. Returns formatted agent information including ID, name, IP, status, OS details, and last activity. Supports filtering by status, name, IP, group, OS platform, and version.",
-	}, func(ctx context.Context, request *mcp.CallToolRequest, in AgentsInput) (*mcp.CallToolResult, any, error) {
-		fmt.Fprintf(os.Stderr, "Get Wazuh Agents called with limit: %d, status: %s, name: %s, IP: %s, group: %s, OS platform: %s, version: %s\n", in.Limit, in.Status, in.Name, in.IP, in.Group, in.OSPlatform, in.Version)
-		limit := 300
+		Description: "Retrieve a list of all agents with their status and details",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, in GetAgentsInput) (*mcp.CallToolResult, any, error) {
+		limit := 100
 		if in.Limit > 0 {
 			limit = in.Limit
 		}
+		var agents []wazuh.Agent
+		var err error
+		if in.AgentID != "" {
+			var agent *wazuh.Agent
+			agent, err = client.GetAgentInfo(in.AgentID)
+			if err == nil {
+				agents = []wazuh.Agent{*agent}
+			}
+		} else {
+			agents, err = client.GetAgents(limit, in.Status, in.Name, in.IP, in.Group, in.OSPlatform, in.Version)
+		}
 
-		agents, err := client.GetAgents(limit, in.Status, in.Name, in.IP, in.Group, in.OSPlatform, in.Version)
 		if err != nil {
 			return &mcp.CallToolResult{
-				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error retrieving agents: %v", err)}},
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: %v", err)}},
 				IsError: true,
 			}, nil, nil
 		}
 
 		if len(agents) == 0 {
 			return &mcp.CallToolResult{
-				Content: []mcp.Content{&mcp.TextContent{Text: "No Wazuh agents found matching the specified criteria."}},
+				Content: []mcp.Content{&mcp.TextContent{Text: "No agents found."}},
 			}, nil, nil
 		}
 
 		var items []mcp.Content
 		for _, agent := range agents {
-			statusIndicator := agent.Status
-			switch strings.ToLower(agent.Status) {
-			case "active":
-				statusIndicator = "🟢 ACTIVE"
-			case "disconnected":
-				statusIndicator = "🔴 DISCONNECTED"
-			case "pending":
-				statusIndicator = "🟡 PENDING"
-			case "never_connected":
-				statusIndicator = "⚪ NEVER CONNECTED"
+			statusIndicator := "🔴"
+			if agent.Status == "active" {
+				statusIndicator = "🟢"
+			} else if agent.Status == "pending" {
+				statusIndicator = "🟡"
 			}
 
 			ipInfo := ""
 			if agent.IP != "" {
-				ipInfo = "\nIP: " + agent.IP
-			}
-
-			registerIPInfo := ""
-			if agent.RegisterIP != "" && agent.RegisterIP != agent.IP {
-				registerIPInfo = "\nRegistered IP: " + agent.RegisterIP
+				ipInfo = " (" + agent.IP + ")"
 			}
 
 			osInfo := ""
 			if agent.OS.Name != "" {
-				osParts := []string{agent.OS.Name}
+				osInfo = "\nOS: " + agent.OS.Name
 				if agent.OS.Version != "" {
-					osParts = append(osParts, agent.OS.Version)
+					osInfo += " " + agent.OS.Version
 				}
-				if agent.OS.Arch != "" {
-					osParts = append(osParts, "("+agent.OS.Arch+")")
-				}
-				osInfo = "\nOS: " + strings.Join(osParts, " ")
 			}
 
-			versionInfo := ""
-			if agent.Version != "" {
-				versionInfo = "\nAgent Version: " + agent.Version
-			}
-
-			groupInfo := ""
-			if len(agent.Group) > 0 {
-				groupInfo = "\nGroups: " + strings.Join(agent.Group, ", ")
-			}
-
-			lastKeepAliveInfo := ""
-			if agent.LastKeepAlive != "" {
-				lastKeepAliveInfo = "\nLast Keep Alive: " + agent.LastKeepAlive
-			}
-
-			dateAddInfo := ""
-			if agent.DateAdd != "" {
-				dateAddInfo = "\nRegistered: " + agent.DateAdd
-			}
-
-			nodeInfo := ""
-			if agent.NodeName != "" {
-				nodeInfo = "\nNode: " + agent.NodeName
-			}
-
-			configStatusInfo := ""
-			if agent.GroupConfigStatus != "" {
-				configIndicator := agent.GroupConfigStatus
-				switch strings.ToLower(agent.GroupConfigStatus) {
-				case "synced":
-					configIndicator = "✅ SYNCED"
-				case "not synced":
-					configIndicator = "❌ NOT SYNCED"
-				}
-				configStatusInfo = "\nConfig Status: " + configIndicator
-			}
-
-			agentIDDisplay := agent.ID
-			if agent.ID == "000" {
-				agentIDDisplay = "000 (Wazuh Manager)"
-			}
-
-			formattedText := fmt.Sprintf("Agent ID: %s\nName: %s\nStatus: %s%s%s%s%s%s%s%s%s%s",
-				agentIDDisplay, agent.Name, statusIndicator, ipInfo, registerIPInfo, osInfo, versionInfo, groupInfo, lastKeepAliveInfo, dateAddInfo, nodeInfo, configStatusInfo)
+			formattedText := fmt.Sprintf("%s Agent %s: %s%s%s\nVersion: %s", statusIndicator, agent.ID, agent.Name, ipInfo, osInfo, agent.Version)
 			items = append(items, &mcp.TextContent{Text: formattedText})
 		}
-
 		return &mcp.CallToolResult{Content: items}, nil, nil
 	})
 
-	// get_wazuh_agent_processes
-	type AgentProcessesInput struct {
-		AgentID string `json:"agent_id" jsonschema:"description:Agent ID to get processes for (required)"`
-		Limit   int    `json:"limit,omitempty" jsonschema:"description:Maximum number of processes to retrieve (default: 300)"`
-		Search  string `json:"search,omitempty" jsonschema:"description:Search string to filter processes by name or command (optional)"`
-	}
+	// get_wazuh_running_agents
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "get_wazuh_agent_processes",
-		Description: "Retrieves a list of running processes for a specific Wazuh agent. Returns formatted process information including PID, name, state, user, and command. Supports filtering by process name/command.",
-	}, func(ctx context.Context, request *mcp.CallToolRequest, in AgentProcessesInput) (*mcp.CallToolResult, any, error) {
-		agentID := formatAgentID(in.AgentID)
-
-		limit := 300
-		if in.Limit > 0 {
-			limit = in.Limit
-		}
-
-		processes, err := client.GetAgentProcesses(agentID, limit, in.Search)
+		Name:        "get_wazuh_running_agents",
+		Description: "Quickly retrieve all currently active/running security agents",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, in struct{}) (*mcp.CallToolResult, any, error) {
+		agents, err := client.GetRunningAgents()
 		if err != nil {
 			return &mcp.CallToolResult{
-				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error retrieving processes: %v", err)}},
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: %v", err)}},
 				IsError: true,
 			}, nil, nil
 		}
-
-		if len(processes) == 0 {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("No processes found for agent %s matching the specified criteria.", agentID)}},
-			}, nil, nil
-		}
-
-		var items []mcp.Content
-		for _, proc := range processes {
-			var details []string
-			details = append(details, fmt.Sprintf("PID: %d", proc.PID))
-			details = append(details, fmt.Sprintf("Name: %s", proc.Name))
-			if proc.State != "" {
-				details = append(details, fmt.Sprintf("State: %s", proc.State))
-			}
-			if proc.PPID != 0 {
-				details = append(details, fmt.Sprintf("PPID: %d", proc.PPID))
-			}
-			if proc.EUser != "" {
-				details = append(details, fmt.Sprintf("User: %s", proc.EUser))
-			}
-			if proc.Cmd != "" {
-				details = append(details, fmt.Sprintf("Command: %s", proc.Cmd))
-			}
-			if proc.StartTime != "" {
-				details = append(details, fmt.Sprintf("Start Time: %s", proc.StartTime))
-			}
-			if proc.Resident > 0 {
-				details = append(details, fmt.Sprintf("Memory (Resident): %d KB", proc.Resident/1024))
-			}
-			if proc.VMSize > 0 {
-				details = append(details, fmt.Sprintf("Memory (VM Size): %d KB", proc.VMSize/1024))
-			}
-
-			items = append(items, &mcp.TextContent{Text: strings.Join(details, "\n")})
-		}
-
-		return &mcp.CallToolResult{Content: items}, nil, nil
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Running Agents:\n%s", prettyJSON(agents))}},
+		}, nil, nil
 	})
 
-	// get_wazuh_agent_ports
-	type AgentPortsInput struct {
-		AgentID  string `json:"agent_id" jsonschema:"description:Agent ID to get network ports for (required)"`
-		Limit    int    `json:"limit,omitempty" jsonschema:"description:Maximum number of ports to retrieve (default: 300)"`
-		Protocol string `json:"protocol,omitempty" jsonschema:"description:Protocol to filter by (e.g., \"tcp\", \"udp\")"`
-		State    string `json:"state,omitempty" jsonschema:"description:State to filter by (e.g., \"LISTENING\", \"ESTABLISHED\")"`
+	// check_agent_health
+	type AgentIDInput struct {
+		AgentID string `json:"agent_id" jsonschema:"description:Target agent ID"`
 	}
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "get_wazuh_agent_ports",
-		Description: "Retrieves a list of open network ports for a specific Wazuh agent. Returns formatted port information including local/remote IP and port, protocol, state, and associated process/PID. Supports filtering by protocol and state.",
-	}, func(ctx context.Context, request *mcp.CallToolRequest, in AgentPortsInput) (*mcp.CallToolResult, any, error) {
-		fmt.Fprintf(os.Stderr, "Get Wazuh Agent Ports called with agent ID: %s, limit: %d, protocol: %s, state: %s\n", in.AgentID, in.Limit, in.Protocol, in.State)
-		agentID := formatAgentID(in.AgentID)
-
-		limit := 300
-		if in.Limit > 0 {
-			limit = in.Limit
-		}
-
-		// Fetch more to allow for client-side state filtering
-		ports, err := client.GetAgentPorts(agentID, limit*2, in.Protocol)
+		Name:        "check_agent_health",
+		Description: "Verify the health status, connection, and synchronization of a specific agent",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, in AgentIDInput) (*mcp.CallToolResult, any, error) {
+		health, err := client.CheckAgentHealth(in.AgentID)
 		if err != nil {
 			return &mcp.CallToolResult{
-				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error retrieving agent ports: %v", err)}},
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: %v", err)}},
 				IsError: true,
 			}, nil, nil
 		}
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Agent Health:\n%s", prettyJSON(health))}},
+		}, nil, nil
+	})
 
-		if in.State != "" {
-			var filtered []wazuh.Port
-			isListening := strings.EqualFold(in.State, "listening")
-			for _, port := range ports {
-				match := false
-				if port.State != "" {
-					if isListening {
-						match = strings.EqualFold(port.State, "listening")
-					} else {
-						match = !strings.EqualFold(port.State, "listening")
-					}
-				} else {
-					match = !isListening
-				}
-				if match {
-					filtered = append(filtered, port)
-				}
-			}
-			ports = filtered
+	// get_agent_processes
+	type GetProcessesInput struct {
+		AgentID string `json:"agent_id" jsonschema:"description:Target agent ID"`
+		Limit   int    `json:"limit,omitempty" jsonschema:"description:Maximum results (default: 100)"`
+	}
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "get_agent_processes",
+		Description: "Retrieve a list of running processes on a specific agent (Syscollector)",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, in GetProcessesInput) (*mcp.CallToolResult, any, error) {
+		limit := 100
+		if in.Limit > 0 {
+			limit = in.Limit
 		}
-
-		if len(ports) > limit {
-			ports = ports[:limit]
-		}
-
-		if len(ports) == 0 {
+		processes, err := client.GetAgentProcesses(in.AgentID, limit)
+		if err != nil {
 			return &mcp.CallToolResult{
-				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("No network ports found for agent %s matching the specified criteria.", agentID)}},
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: %v", err)}},
+				IsError: true,
 			}, nil, nil
 		}
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Agent Processes:\n%s", prettyJSON(processes))}},
+		}, nil, nil
+	})
 
-		var items []mcp.Content
-		for _, port := range ports {
-			details := []string{
-				fmt.Sprintf("Protocol: %s", port.Protocol),
-				fmt.Sprintf("Local: %s:%d", port.Local.IP, port.Local.Port),
-			}
-			if port.Remote.IP != "" || port.Remote.Port != 0 {
-				details = append(details, fmt.Sprintf("Remote: %s:%d", port.Remote.IP, port.Remote.Port))
-			}
-			if port.State != "" {
-				details = append(details, fmt.Sprintf("State: %s", port.State))
-			}
-			if port.Process != "" {
-				details = append(details, fmt.Sprintf("Process Name: %s", port.Process))
-			}
-			if port.PID != 0 {
-				details = append(details, fmt.Sprintf("PID: %d", port.PID))
-			}
-			if port.Inode != 0 {
-				details = append(details, fmt.Sprintf("Inode: %d", port.Inode))
-			}
-
-			items = append(items, &mcp.TextContent{Text: strings.Join(details, "\n")})
+	// get_agent_ports
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "get_agent_ports",
+		Description: "Retrieve a list of open network ports on a specific agent (Syscollector)",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, in GetProcessesInput) (*mcp.CallToolResult, any, error) {
+		limit := 100
+		if in.Limit > 0 {
+			limit = in.Limit
 		}
+		ports, err := client.GetAgentPorts(in.AgentID, limit)
+		if err != nil {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: %v", err)}},
+				IsError: true,
+			}, nil, nil
+		}
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Agent Ports:\n%s", prettyJSON(ports))}},
+		}, nil, nil
+	})
 
-		return &mcp.CallToolResult{Content: items}, nil, nil
+	// get_agent_configuration
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "get_agent_configuration",
+		Description: "Retrieve the active configuration of a specific agent",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, in AgentIDInput) (*mcp.CallToolResult, any, error) {
+		config, err := client.GetAgentConfiguration(in.AgentID)
+		if err != nil {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Error: %v", err)}},
+				IsError: true,
+			}, nil, nil
+		}
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Agent Configuration:\n%s", prettyJSON(config))}},
+		}, nil, nil
 	})
 }
