@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"mcp-server-wazuh/internal/testutils"
-	"mcp-server-wazuh/internal/wazuh"
+	"github.com/ba0f3/mcp-server-wazuh/internal/testutils"
+	"github.com/ba0f3/mcp-server-wazuh/internal/wazuh"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )

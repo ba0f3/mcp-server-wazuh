@@ -1,6 +1,6 @@
-module mcp-server-wazuh
+module github.com/ba0f3/mcp-server-wazuh
 
-go 1.24.3
+go 1.25.0
 
 require (
 	github.com/go-resty/resty/v2 v2.17.1

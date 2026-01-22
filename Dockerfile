@@ -1,26 +1,29 @@
-FROM rust:1.86-slim as builder
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /usr/src/app
+
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
 COPY . .
 
-RUN apt-get update && \
-    apt-get install -y pkg-config libssl-dev build-essential perl make && \
-    cargo build --release
+# Build the application
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o mcp-server-wazuh .
 
-FROM debian:bookworm-slim
+FROM alpine:latest
 
-RUN apt-get update && \
-    apt-get install -y ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+RUN apk --no-cache add ca-certificates
 
 WORKDIR /app
 
-COPY --from=builder /usr/src/app/target/release/mcp-server-wazuh /app/mcp-server-wazuh
-COPY .env.example /app/.env.example
+COPY --from=builder /usr/src/app/mcp-server-wazuh /app/mcp-server-wazuh
 
-RUN useradd -m wazuh
+RUN adduser -D -s /bin/sh wazuh
 USER wazuh
 
-EXPOSE 8000
+# The Go app uses stdio transport, so no port exposure needed
+# MCP servers communicate via stdin/stdout
 
 CMD ["./mcp-server-wazuh"]

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"mcp-server-wazuh/internal/wazuh"
+	"github.com/ba0f3/mcp-server-wazuh/internal/wazuh"
 
 	"github.com/joho/godotenv"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
