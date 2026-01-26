@@ -58,9 +58,15 @@ func (s *Server) Run() error {
 
 // runHTTP starts the server with HTTP transport
 func (s *Server) runHTTP() error {
-	handler := mcp.NewStreamableHTTPHandler(func(req *http.Request) *mcp.Server {
+	mcpHandler := mcp.NewStreamableHTTPHandler(func(req *http.Request) *mcp.Server {
 		return s.mcpServer
 	}, nil)
+
+	// Wrap handler with API key authentication middleware
+	var handler http.Handler = mcpHandler
+	if s.config.APIKey != "" {
+		handler = s.apiKeyMiddleware(mcpHandler)
+	}
 
 	url := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 	fmt.Fprintf(os.Stderr, "MCP server listening on %s\n", url)
@@ -69,6 +75,25 @@ func (s *Server) runHTTP() error {
 		return fmt.Errorf("server failed: %w", err)
 	}
 	return nil
+}
+
+// apiKeyMiddleware validates the API_KEY header for MCP server authentication
+func (s *Server) apiKeyMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiKey := r.Header.Get("API_KEY")
+		if apiKey == "" {
+			apiKey = r.Header.Get("X-API-Key") // Also check common alternative header
+		}
+
+		if s.config.APIKey != "" && apiKey != s.config.APIKey {
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"error":"unauthorized","message":"Invalid or missing API_KEY header"}`)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 // runStdio starts the server with stdio transport

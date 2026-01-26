@@ -29,6 +29,7 @@ type Config struct {
 	Transport string
 	Host      string
 	Port      int
+	APIKey    string // API key for MCP server authentication
 }
 
 // Load loads configuration from environment variables
@@ -97,6 +98,7 @@ func Load() (*Config, error) {
 		Transport:            getEnv("MCP_SERVER_TRANSPORT", "stdio"),
 		Host:                 getEnv("MCP_SERVER_HOST", "localhost"),
 		Port:                 serverPort,
+		APIKey:               getEnv("MCP_SERVER_API_KEY", ""),
 	}, nil
 }
 
