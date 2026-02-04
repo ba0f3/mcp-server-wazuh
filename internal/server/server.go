@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/ba0f3/mcp-server-wazuh/internal/config"
 	"github.com/ba0f3/mcp-server-wazuh/internal/tools"
@@ -83,6 +84,11 @@ func (s *Server) apiKeyMiddleware(next http.Handler) http.Handler {
 		apiKey := r.Header.Get("API_KEY")
 		if apiKey == "" {
 			apiKey = r.Header.Get("X-API-Key") // Also check common alternative header
+		}
+
+		if apiKey == "" {
+			apiKey = r.Header.Get("Authorization")
+			apiKey = strings.TrimPrefix(apiKey, "Bearer ")
 		}
 
 		if s.config.APIKey != "" && apiKey != s.config.APIKey {
